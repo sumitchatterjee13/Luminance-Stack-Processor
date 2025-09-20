@@ -69,13 +69,10 @@ def cv2_to_tensor(hdr_image: np.ndarray, output_16bit_linear: bool = True, algor
         
         # VFX PIPELINE APPROACH: Different scaling philosophy per algorithm
         if algorithm_hint == "natural_blend":
-            # Natural Blend: Conservative scaling, values 1-5 range
-            p90 = np.percentile(hdr_image, 90.0)
-            if p90 > 0:
-                hdr_linear = hdr_image * (2.0 / p90)
-            else:
-                hdr_linear = hdr_image * 2.0
-            hdr_linear = np.clip(hdr_linear, 0.0, 8.0)
+            # Natural Blend: Preserve EV0 appearance exactly - NO SCALING
+            # The algorithm already provides the correctly scaled values
+            hdr_linear = hdr_image
+            logger.info(f"  Natural Blend: Direct pass-through (preserves EV0 appearance)")
             
         elif algorithm_hint == "mertens":
             # Mertens: Medium HDR range, values 1-10 range
@@ -118,14 +115,6 @@ def cv2_to_tensor(hdr_image: np.ndarray, output_16bit_linear: bool = True, algor
                 logger.info(f"  Zero image detected - no processing applied")
                 
             logger.info(f"  VFX FLAT LOG: Appearance will be flat/desaturated - this is PROFESSIONAL STANDARD")
-            
-        elif algorithm_hint == "natural_blend":
-            # Natural Blend: Preserve EV0 appearance exactly
-            # Values above 1.0 contain HDR information
-            # No scaling needed - the algorithm already handles it
-            hdr_linear = hdr_image
-            logger.info(f"  Natural Blend: Preserving EV0 appearance with HDR extension")
-            logger.info(f"  HDR values preserved: max={hdr_linear.max():.2f}")
             
         else:
             # Unknown algorithm - conservative approach
@@ -263,21 +252,23 @@ class DebevecHDRProcessor:
                 
                 logger.info(f"Debevec raw radiance range: [{hdr_radiance.min():.6f}, {hdr_radiance.max():.6f}]")
                 
-                # CRITICAL FIX: OpenCV's Debevec has a known bug that inverts colors
-                # GitHub issue #5787 - MergeDebevec produces inverted colors
-                # Fix by inverting the output
-                logger.warning("Applying inversion fix for OpenCV Debevec color bug (issue #5787)")
-                hdr_radiance = 1.0 - hdr_radiance
+                # NOTE: OpenCV's Debevec sometimes has issues with color
+                # Check if values are reasonable
+                if hdr_radiance.mean() < 0.001:
+                    logger.warning("Debevec produced very dark image, applying recovery")
+                    # Try to recover by scaling
+                    hdr_radiance = hdr_radiance * 100.0
+                elif hdr_radiance.mean() > 100.0:
+                    logger.warning("Debevec produced extremely bright image, scaling down")
+                    hdr_radiance = hdr_radiance / 100.0
                 
-                # After inversion, scale back to proper HDR range
-                if hdr_radiance.max() > 0:
-                    # Scale to reasonable HDR range
-                    p95 = np.percentile(hdr_radiance, 95)
-                    if p95 > 0:
-                        scale_factor = 2.0 / p95
-                        hdr_radiance = hdr_radiance * scale_factor
+                # Apply minimal scaling for VFX pipeline
+                if hdr_radiance.max() > 1000.0:
+                    scale_factor = 100.0 / np.percentile(hdr_radiance, 99.5)
+                    hdr_radiance = hdr_radiance * scale_factor
+                    logger.info(f"Applied minimal scaling for numerical stability: {scale_factor:.3f}")
                 
-                logger.info(f"Debevec output after inversion fix: [{hdr_radiance.min():.6f}, {hdr_radiance.max():.6f}]")
+                logger.info(f"Debevec VFX output (linear radiance): [{hdr_radiance.min():.6f}, {hdr_radiance.max():.6f}]")
             
             # Validate HDR output
             if hdr_radiance is None or hdr_radiance.size == 0:
@@ -382,22 +373,10 @@ class DebevecHDRProcessor:
         
         logger.info(f"Using image {ev0_idx} as EV0 base (out of {len(images)} images)")
         
-        # Convert all images to float and adjust exposure levels
+        # Convert all images to float (no exposure compensation needed)
         float_images = []
         for i, img in enumerate(images):
             float_img = img.astype(np.float32) / 255.0
-            
-            # Compensate for exposure differences to align with EV0
-            # This ensures all images have similar brightness levels
-            if i < ev0_idx:  # Overexposed images
-                # Scale down to match EV0 brightness
-                exposure_diff = times[i] / times[ev0_idx]
-                float_img = float_img * exposure_diff
-            elif i > ev0_idx:  # Underexposed images
-                # Scale up to match EV0 brightness
-                exposure_diff = times[i] / times[ev0_idx]
-                float_img = float_img * exposure_diff
-                
             float_images.append(float_img)
         
         # Start with EV0 as the base - this ensures perfect appearance match
@@ -415,9 +394,10 @@ class DebevecHDRProcessor:
             for i in range(ev0_idx + 1, len(float_images)):
                 img = float_images[i]
                 
-                # Scale the underexposed image to extend beyond 1.0
-                # This creates true HDR values
-                scale_factor = 2.0 ** (i - ev0_idx)  # Exponential scaling for HDR
+                # Use the actual exposure difference for HDR scaling
+                # Underexposed images have longer exposure times
+                exposure_ratio = times[ev0_idx] / times[i]
+                scale_factor = exposure_ratio  # This gives proper HDR scaling
                 
                 # Blend only in highlight areas
                 for c in range(3):
