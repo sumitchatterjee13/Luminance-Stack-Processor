@@ -88,19 +88,24 @@ def cv2_to_tensor(hdr_image: np.ndarray, output_16bit_linear: bool = True) -> to
 
 
 class DebevecHDRProcessor:
-    """Core HDR processing using Debevec Algorithm"""
+    """Core HDR processing using multiple algorithms"""
     
     def __init__(self):
         self.calibrator = cv2.createCalibrateDebevec()
         self.merge_debevec = cv2.createMergeDebevec()
+        # Alternative algorithms
+        self.merge_mertens = cv2.createMergeMertens()
+        self.merge_robertson = cv2.createMergeRobertson()
+        self.calibrator_robertson = cv2.createCalibrateRobertson()
         
-    def process_hdr(self, images: List[np.ndarray], exposure_times: List[float]) -> np.ndarray:
+    def process_hdr(self, images: List[np.ndarray], exposure_times: List[float], algorithm: str = "mertens") -> np.ndarray:
         """
-        Process multiple exposure images using Debevec algorithm with proper linear colorspace handling
+        Process multiple exposure images using various HDR algorithms
         
         Args:
             images: List of 8-bit images (OpenCV format) - CRITICAL: Must be 8-bit for OpenCV HDR
-            exposure_times: List of exposure times in seconds
+            exposure_times: List of exposure times in seconds  
+            algorithm: HDR algorithm to use ("mertens", "debevec", "robertson")
             
         Returns:
             HDR merged image in linear colorspace (float32)
@@ -112,9 +117,11 @@ class DebevecHDRProcessor:
                 if img.dtype != np.uint8:
                     logger.warning(f"Image {i} is not 8-bit (dtype: {img.dtype}), this may cause issues")
                 
-                # Ensure proper format
+                # CRITICAL FIX: Convert BGR to RGB for proper color handling
+                # OpenCV uses BGR by default, but HDR processing expects RGB
                 if len(img.shape) == 3 and img.shape[2] == 3:  # RGB
-                    processed_images.append(img)
+                    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                    processed_images.append(img_rgb)
                 else:
                     logger.error(f"Image {i} has invalid shape: {img.shape}")
                     raise ValueError(f"Image must be 3-channel RGB, got shape: {img.shape}")
@@ -122,24 +129,40 @@ class DebevecHDRProcessor:
             # Convert exposure times to numpy array
             times = np.array(exposure_times, dtype=np.float32)
             
-            logger.info(f"Processing {len(processed_images)} images with exposure times: {times}")
+            logger.info(f"Processing {len(processed_images)} images with {algorithm} algorithm")
+            logger.info(f"Exposure times: {times}")
             logger.info(f"Image formats: {[img.shape for img in processed_images]}")
             logger.info(f"Image dtypes: {[img.dtype for img in processed_images]}")
             
-            # Estimate camera response function using Debevec method
-            logger.info("Estimating camera response function...")
-            response = self.calibrator.process(processed_images, times)
-            logger.info(f"Response function shape: {response.shape}")
-            
-            # Merge images into HDR using Debevec algorithm
-            logger.info("Merging images using Debevec algorithm...")
-            hdr_radiance = self.merge_debevec.process(processed_images, times, response)
+            # Process using selected algorithm
+            if algorithm == "mertens":
+                # Mertens Exposure Fusion - often produces better results
+                logger.info("Using Mertens Exposure Fusion algorithm...")
+                hdr_radiance = self.merge_mertens.process(processed_images)
+                # Mertens output is typically in 0-1 range, scale appropriately
+                if hdr_radiance.max() <= 1.0:
+                    hdr_radiance = hdr_radiance * 2.0  # Boost for better dynamic range
+                
+            elif algorithm == "robertson":
+                # Robertson algorithm - alternative to Debevec
+                logger.info("Using Robertson algorithm...")
+                response = self.calibrator_robertson.process(processed_images, times)
+                hdr_radiance = self.merge_robertson.process(processed_images, times, response)
+                
+            else:  # Default to Debevec
+                # Estimate camera response function using Debevec method
+                logger.info("Using Debevec algorithm...")
+                response = self.calibrator.process(processed_images, times)
+                logger.info(f"Response function shape: {response.shape}")
+                
+                # Merge images into HDR using Debevec algorithm
+                hdr_radiance = self.merge_debevec.process(processed_images, times, response)
             
             # Validate HDR output
             if hdr_radiance is None or hdr_radiance.size == 0:
                 raise ValueError("HDR merge produced empty result")
             
-            logger.info(f"HDR merge completed:")
+            logger.info(f"HDR merge completed with {algorithm} algorithm:")
             logger.info(f"  Output shape: {hdr_radiance.shape}")
             logger.info(f"  Output dtype: {hdr_radiance.dtype}")
             logger.info(f"  Value range: [{hdr_radiance.min():.6f}, {hdr_radiance.max():.6f}]")
@@ -148,6 +171,11 @@ class DebevecHDRProcessor:
             # Check for valid HDR data
             if np.all(hdr_radiance == 0):
                 raise ValueError("HDR merge produced all-zero result")
+            
+            # CRITICAL FIX: Convert back from RGB to BGR for consistency
+            # This ensures the output color channels are in the expected order
+            if len(hdr_radiance.shape) == 3 and hdr_radiance.shape[2] == 3:
+                hdr_radiance = cv2.cvtColor(hdr_radiance, cv2.COLOR_RGB2BGR)
             
             # The result is already in linear colorspace (scene radiance values)
             # Don't apply tone mapping - preserve the HDR data as-is
@@ -194,6 +222,9 @@ class LuminanceStackProcessor3Stops:
                     "step": 0.1,
                     "display": "number"
                 }),
+                "hdr_algorithm": (["mertens", "debevec", "robertson"], {
+                    "default": "mertens"
+                }),
             }
         }
     
@@ -205,7 +236,7 @@ class LuminanceStackProcessor3Stops:
     def __init__(self):
         self.processor = DebevecHDRProcessor()
     
-    def process_3_stop_hdr(self, ev_plus_2, ev_0, ev_minus_2, exposure_step=2.0):
+    def process_3_stop_hdr(self, ev_plus_2, ev_0, ev_minus_2, exposure_step=2.0, hdr_algorithm="mertens"):
         """
         Process 3-stop HDR merge
         
@@ -235,10 +266,10 @@ class LuminanceStackProcessor3Stops:
             images = [img_plus_2, img_0, img_minus_2]
             times = [time_plus_2, time_0, time_minus_2]
             
-            logger.info(f"3-Stop HDR: Processing with times {times}")
+            logger.info(f"3-Stop HDR: Processing with times {times} using {hdr_algorithm} algorithm")
             
-            # Process HDR using improved Debevec algorithm
-            hdr_result = self.processor.process_hdr(images, times)
+            # Process HDR using selected algorithm (default: Mertens for better results)
+            hdr_result = self.processor.process_hdr(images, times, algorithm=hdr_algorithm)
             
             # Convert back to tensor - output 16-bit linear data
             output_tensor = cv2_to_tensor(hdr_result, output_16bit_linear=True)
@@ -275,6 +306,9 @@ class LuminanceStackProcessor5Stops:
                     "step": 0.1,
                     "display": "number"
                 }),
+                "hdr_algorithm": (["mertens", "debevec", "robertson"], {
+                    "default": "mertens"
+                }),
             }
         }
     
@@ -286,7 +320,7 @@ class LuminanceStackProcessor5Stops:
     def __init__(self):
         self.processor = DebevecHDRProcessor()
     
-    def process_5_stop_hdr(self, ev_plus_4, ev_plus_2, ev_0, ev_minus_2, ev_minus_4, exposure_step=2.0):
+    def process_5_stop_hdr(self, ev_plus_4, ev_plus_2, ev_0, ev_minus_2, ev_minus_4, exposure_step=2.0, hdr_algorithm="mertens"):
         """
         Process 5-stop HDR merge
         
@@ -321,10 +355,10 @@ class LuminanceStackProcessor5Stops:
             images = [img_plus_4, img_plus_2, img_0, img_minus_2, img_minus_4]
             times = [time_plus_4, time_plus_2, time_0, time_minus_2, time_minus_4]
             
-            logger.info(f"5-Stop HDR: Processing with times {times}")
+            logger.info(f"5-Stop HDR: Processing with times {times} using {hdr_algorithm} algorithm")
             
-            # Process HDR using improved Debevec algorithm
-            hdr_result = self.processor.process_hdr(images, times)
+            # Process HDR using selected algorithm (default: Mertens for better results)
+            hdr_result = self.processor.process_hdr(images, times, algorithm=hdr_algorithm)
             
             # Convert back to tensor - output 16-bit linear data  
             output_tensor = cv2_to_tensor(hdr_result, output_16bit_linear=True)

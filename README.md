@@ -12,7 +12,7 @@ Professional HDR (High Dynamic Range) processing nodes for ComfyUI using the **D
 
 ## 🎯 Features
 
-- **Professional HDR Processing**: Implements the industry-standard Debevec Algorithm for HDR image creation
+- **Multiple HDR Algorithms**: Supports Mertens Exposure Fusion (default), Debevec, and Robertson algorithms
 - **Two Processing Modes**:
   - **3-Stop Processor**: Merges EV+2, EV+0, EV-2 exposures
   - **5-Stop Processor**: Merges EV+4, EV+2, EV+0, EV-2, EV-4 exposures
@@ -76,6 +76,7 @@ Perfect for standard HDR bracketing with 3 exposures:
 - `ev_0`: Normal exposure image (0 EV)
 - `ev_minus_2`: Underexposed image (-2 EV)
 - `exposure_step`: (Optional) EV step size (default: 2.0)
+- `hdr_algorithm`: (Optional) Algorithm to use: "mertens" (default), "debevec", "robertson"
 
 **Output:**
 - `hdr_image`: Merged 16-bit linear HDR image
@@ -91,19 +92,37 @@ For extended dynamic range with 5 exposures:
 - `ev_minus_2`: Underexposed image (-2 EV)
 - `ev_minus_4`: Most underexposed image (-4 EV)
 - `exposure_step`: (Optional) EV step size (default: 2.0)
+- `hdr_algorithm`: (Optional) Algorithm to use: "mertens" (default), "debevec", "robertson"
 
 **Output:**
 - `hdr_image`: Merged 16-bit linear HDR image
 
 ## 🔬 How It Works
 
-The nodes implement the **Debevec Algorithm** (Paul E. Debevec, Jitendra Malik, 1997) which:
+The nodes implement **multiple HDR algorithms** with **Mertens Exposure Fusion** as the default (often produces better results):
 
 1. **Analyzes Multiple Exposures**: Takes differently exposed 8-bit images of the same scene
 2. **Estimates Camera Response Function**: Determines how the camera sensor responds to light
 3. **Recovers Scene Radiance**: Calculates the actual light values in the scene
 4. **Merges to HDR**: Combines all exposures into a single high dynamic range image
 5. **Linear 16-bit Output**: Outputs 16-bit linear colorspace data preserving full HDR range
+
+### 🎯 **HDR Algorithm Options:**
+
+#### **Mertens Exposure Fusion (Default - Recommended)**
+- **Best for most use cases**: Produces natural-looking results similar to Adobe Lightroom
+- **No tone mapping needed**: Output looks like enhanced EV0 with extended dynamic range
+- **Fastest processing**: No camera response function estimation required
+- **Color accuracy**: Superior color handling, avoids common HDR artifacts
+
+#### **Debevec Algorithm (Classic HDR)**
+- **Industry standard**: Original HDR reconstruction method from 1997
+- **True scene radiance**: Recovers actual physical light values
+- **Research accurate**: Mathematically precise but may require tone mapping for display
+
+#### **Robertson Algorithm**
+- **Alternative approach**: Different camera response function estimation method
+- **Similar to Debevec**: But with different mathematical approach
 
 ## 📸 Best Practices
 
@@ -119,9 +138,14 @@ The nodes implement the **Debevec Algorithm** (Paul E. Debevec, Jitendra Malik, 
 - **5-Stop**: +4, +2, 0, -2, -4 EV (16x range)
 - Adjust `exposure_step` parameter if using different increments
 
+### Algorithm Selection Guide:
+- **Use Mertens (Default)**: For most photography - produces natural results like Lightroom
+- **Use Debevec**: For scientific/research work requiring precise scene radiance values
+- **Use Robertson**: Alternative to Debevec with different mathematical approach
+
 ## ⚙️ Technical Details
 
-- **Algorithm**: Debevec & Malik HDR reconstruction
+- **Algorithms**: Mertens Exposure Fusion (default), Debevec, Robertson
 - **Input Format**: 8-bit ComfyUI IMAGE tensors (0-1 float range from 8-bit sources)
 - **Output Format**: 16-bit linear colorspace images for extended dynamic range
 - **Processing**: OpenCV's `createCalibrateDebevec()` and `createMergeDebevec()`
@@ -136,12 +160,23 @@ The nodes implement the **Debevec Algorithm** (Paul E. Debevec, Jitendra Malik, 
    - Ensure all dependencies are installed: `pip install -r requirements.txt`
    - Restart ComfyUI completely
 
-2. **Poor HDR results**:
+2. **Color inversion or wrong colors**:
+   - Try switching to **Mertens algorithm** (default) - usually fixes color issues
+   - Mertens produces more natural colors similar to Adobe Lightroom
+   - Debevec/Robertson may need additional tone mapping for proper color appearance
+
+3. **Image too bright or too dark**:
+   - **Mertens algorithm** (default) produces best brightness levels
+   - Output should look like enhanced EV0 with extended dynamic range
+   - For Debevec/Robertson, you may need tone mapping in post-processing
+
+4. **Poor HDR results**:
    - Ensure input images are properly exposed (not all over/under)
    - Check that images are aligned (use tripod)
    - Verify EV differences match your capture method
+   - Try different algorithms: Mertens usually works best
 
-3. **Memory issues**:
+5. **Memory issues**:
    - Process smaller images first
    - Ensure adequate RAM available
    - Close unnecessary applications

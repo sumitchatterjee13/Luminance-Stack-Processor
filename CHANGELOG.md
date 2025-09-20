@@ -15,7 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Enhanced 16-bit linear output** - Improved scaling algorithm for better 16-bit range utilization
 
 ### Fixed
-- Nothing yet
+- **CRITICAL: Fixed color inversion issues** - Added proper BGR↔RGB conversion for correct color handling
+- **Fixed brightness problems** - Improved scaling and algorithm selection
+- **Added Mertens Exposure Fusion algorithm** - Now default, produces better results like Adobe Lightroom
+- **Added Robertson algorithm** - Alternative HDR method for different use cases
+- **Enhanced algorithm selection** - Users can choose between Mertens (default), Debevec, and Robertson
 
 ## [1.0.1] - 2025-01-20
 
