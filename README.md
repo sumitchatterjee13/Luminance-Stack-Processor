@@ -111,21 +111,21 @@ The nodes implement **multiple HDR algorithms** with **Natural Blend** as the de
 
 #### **Natural Blend (Default - Recommended)**  
 - **Perfect for natural look**: Uses EV0 as base appearance, adds dynamic range from other exposures
-- **Zero contrast change**: Output looks exactly like EV0 with enhanced highlight/shadow detail
-- **Seamless blending**: Uses luminance masks for smooth transitions
+- **Gentle blending**: 30% blend strength with smooth luminance masks for natural transitions
+- **Preserved contrast**: Maintains exact EV0 appearance with enhanced highlight/shadow detail
 - **Best of both worlds**: Natural EV0 appearance + extended dynamic range data
 
 #### **Mertens Exposure Fusion**
-- **Good alternative**: Produces natural-looking results similar to Adobe Lightroom  
-- **Automatic blending**: No tone mapping needed, enhanced EV0-like appearance
+- **Adobe Lightroom style**: Produces natural-looking results similar to professional HDR software
+- **Original gamma preserved**: No gamma correction applied - maintains natural color and contrast
 - **Fastest processing**: No camera response function estimation required
-- **May add contrast**: Can make images slightly more contrasty than original
+- **Automatic blending**: Self-contained exposure fusion algorithm
 
 #### **Debevec Algorithm (Classic HDR)**
 - **Industry standard**: Original HDR reconstruction method from 1997
-- **True scene radiance**: Recovers actual physical light values with automatic tone mapping
-- **Natural output**: Now includes Reinhard tone mapping for proper brightness and colors
-- **Research accurate**: Mathematically precise with practical usability improvements
+- **True scene radiance**: Recovers actual physical light values with preserved HDR range
+- **Gentle processing**: Minimal tone mapping preserves dynamic range while ensuring usability
+- **Research accurate**: Mathematically precise HDR reconstruction with proper gamma handling
 
 #### **Robertson Algorithm**
 - **Alternative approach**: Different camera response function estimation method

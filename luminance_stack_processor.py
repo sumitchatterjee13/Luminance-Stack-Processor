@@ -18,7 +18,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def tensor_to_cv2(tensor: torch.Tensor) -> np.ndarray:
+def tensor_to_cv2(tensor: torch.Tensor, apply_gamma_correction: bool = False) -> np.ndarray:
     """Convert ComfyUI tensor to OpenCV format for HDR processing"""
     # ComfyUI tensors are typically [B, H, W, C] in 0-1 range
     if len(tensor.shape) == 4:
@@ -27,14 +27,19 @@ def tensor_to_cv2(tensor: torch.Tensor) -> np.ndarray:
     # Convert to numpy and scale to 8-bit (input images are already 8-bit)
     image = tensor.cpu().numpy()
     
-    # Apply gamma correction (sRGB to linear) before HDR processing
-    # This is crucial for proper camera response function recovery
-    image_linear = np.where(image <= 0.04045, 
-                           image / 12.92,
-                           np.power((image + 0.055) / 1.055, 2.4))
-    
-    # Convert back to 8-bit for OpenCV HDR functions (since inputs are 8-bit)
-    image_8bit = np.clip(image_linear * 255.0, 0, 255).astype(np.uint8)
+    if apply_gamma_correction:
+        # Apply gamma correction (sRGB to linear) for algorithms that need it (Debevec/Robertson)
+        # This is crucial for proper camera response function recovery
+        image_linear = np.where(image <= 0.04045, 
+                               image / 12.92,
+                               np.power((image + 0.055) / 1.055, 2.4))
+        # Convert back to 8-bit for OpenCV HDR functions
+        image_8bit = np.clip(image_linear * 255.0, 0, 255).astype(np.uint8)
+        logger.info(f"Applied gamma correction for HDR processing")
+    else:
+        # For Mertens and Natural Blend - use original gamma (no correction)
+        image_8bit = np.clip(image * 255.0, 0, 255).astype(np.uint8)
+        logger.info(f"No gamma correction applied - using original image gamma")
     
     logger.info(f"Converted tensor to CV2: shape={image_8bit.shape}, dtype={image_8bit.dtype}, range=[{image_8bit.min()}, {image_8bit.max()}]")
     
@@ -117,7 +122,7 @@ class DebevecHDRProcessor:
         self.merge_robertson = cv2.createMergeRobertson()
         self.calibrator_robertson = cv2.createCalibrateRobertson()
         
-    def process_hdr(self, images: List[np.ndarray], exposure_times: List[float], algorithm: str = "mertens") -> np.ndarray:
+    def process_hdr(self, images: List[np.ndarray], exposure_times: List[float], algorithm: str = "natural_blend") -> np.ndarray:
         """
         Process multiple exposure images using various HDR algorithms
         
@@ -139,8 +144,13 @@ class DebevecHDRProcessor:
                 # CRITICAL FIX: Convert BGR to RGB for proper color handling
                 # OpenCV uses BGR by default, but HDR processing expects RGB
                 if len(img.shape) == 3 and img.shape[2] == 3:  # RGB
-                    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                    processed_images.append(img_rgb)
+                    if algorithm in ["debevec", "robertson"]:
+                        # Only convert for algorithms that benefit from it
+                        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                        processed_images.append(img_rgb)
+                    else:
+                        # For Mertens and Natural Blend, keep original format
+                        processed_images.append(img)
                 else:
                     logger.error(f"Image {i} has invalid shape: {img.shape}")
                     raise ValueError(f"Image must be 3-channel RGB, got shape: {img.shape}")
@@ -155,12 +165,12 @@ class DebevecHDRProcessor:
             
             # Process using selected algorithm
             if algorithm == "mertens":
-                # Mertens Exposure Fusion - often produces better results
+                # Mertens Exposure Fusion - uses original gamma, no correction needed
                 logger.info("Using Mertens Exposure Fusion algorithm...")
                 hdr_radiance = self.merge_mertens.process(processed_images)
-                # Mertens output is typically in 0-1 range, scale appropriately
+                # Mertens output is typically in 0-1 range, gently scale for HDR
                 if hdr_radiance.max() <= 1.0:
-                    hdr_radiance = hdr_radiance * 2.0  # Boost for better dynamic range
+                    hdr_radiance = hdr_radiance * 1.5  # Gentle boost, preserve contrast
                     
             elif algorithm == "natural_blend":
                 # Natural Blend - maintains EV0 appearance with enhanced dynamic range
@@ -172,8 +182,8 @@ class DebevecHDRProcessor:
                 logger.info("Using Robertson algorithm...")
                 response = self.calibrator_robertson.process(processed_images, times)
                 hdr_radiance = self.merge_robertson.process(processed_images, times, response)
-                # Apply same tone mapping as Debevec
-                hdr_radiance = self._tone_map_debevec_output(hdr_radiance, "Robertson")
+                # Apply minimal tone mapping to preserve HDR range
+                hdr_radiance = self._gentle_tone_map(hdr_radiance, "Robertson")
                 
             else:  # Default to Debevec
                 # Estimate camera response function using Debevec method
@@ -183,8 +193,8 @@ class DebevecHDRProcessor:
                 
                 # Merge images into HDR using Debevec algorithm
                 hdr_radiance = self.merge_debevec.process(processed_images, times, response)
-                # Apply tone mapping to fix brightness and make output similar to Mertens
-                hdr_radiance = self._tone_map_debevec_output(hdr_radiance, "Debevec")
+                # Apply minimal tone mapping to preserve HDR range
+                hdr_radiance = self._gentle_tone_map(hdr_radiance, "Debevec")
             
             # Validate HDR output
             if hdr_radiance is None or hdr_radiance.size == 0:
@@ -200,9 +210,9 @@ class DebevecHDRProcessor:
             if np.all(hdr_radiance == 0):
                 raise ValueError("HDR merge produced all-zero result")
             
-            # CRITICAL FIX: Convert back from RGB to BGR for consistency
+            # CRITICAL FIX: Convert back from RGB to BGR for consistency (only if we converted earlier)
             # This ensures the output color channels are in the expected order
-            if len(hdr_radiance.shape) == 3 and hdr_radiance.shape[2] == 3:
+            if len(hdr_radiance.shape) == 3 and hdr_radiance.shape[2] == 3 and algorithm in ["debevec", "robertson"]:
                 hdr_radiance = cv2.cvtColor(hdr_radiance, cv2.COLOR_RGB2BGR)
             
             # The result is in linear colorspace - preserve HDR data
@@ -226,49 +236,44 @@ class DebevecHDRProcessor:
                 return fallback_linear.astype(np.float32)
             raise e
 
-    def _tone_map_debevec_output(self, hdr_image: np.ndarray, algorithm_name: str) -> np.ndarray:
+    def _gentle_tone_map(self, hdr_image: np.ndarray, algorithm_name: str) -> np.ndarray:
         """
-        Apply tone mapping to Debevec/Robertson output to fix brightness and color issues
+        Apply gentle tone mapping to preserve HDR range while making output usable
         
         Args:
             hdr_image: Raw HDR output from Debevec/Robertson
             algorithm_name: Name of algorithm for logging
             
         Returns:
-            Tone-mapped HDR image with proper brightness and color balance
+            Gently processed HDR image with preserved dynamic range
         """
         logger.info(f"{algorithm_name} raw output range: [{hdr_image.min():.6f}, {hdr_image.max():.6f}]")
         
-        # Debevec often produces extremely bright values - apply gamma correction and scaling
         try:
-            # Method 1: Reinhard tone mapping for natural results
-            # This is similar to what Lightroom/Photoshop do for HDR
-            reinhard = cv2.createTonemapReinhard(gamma=1.8, intensity=-1.0, light_adapt=0.8, color_adapt=0.0)
-            tone_mapped = reinhard.process(hdr_image.astype(np.float32))
+            # Gentle processing to preserve HDR range but make it usable
             
-            logger.info(f"{algorithm_name} after Reinhard tone mapping: [{tone_mapped.min():.6f}, {tone_mapped.max():.6f}]")
+            # Method 1: Simple scaling based on percentiles (preserves HDR better than Reinhard)
+            p95 = np.percentile(hdr_image, 95)
+            p05 = np.percentile(hdr_image, 5)
             
-            # Ensure reasonable dynamic range
-            if tone_mapped.max() > 0:
-                # Scale to have similar range as Mertens (0-2 range typical)
-                max_val = np.percentile(tone_mapped, 98)  # Use 98th percentile
-                if max_val > 0:
-                    tone_mapped = tone_mapped * (2.0 / max_val)
-                    
-            # Clamp extreme values while preserving HDR range
-            tone_mapped = np.clip(tone_mapped, 0.0, 10.0)
-            
-            logger.info(f"{algorithm_name} final tone mapped range: [{tone_mapped.min():.6f}, {tone_mapped.max():.6f}]")
-            
-            return tone_mapped.astype(np.float32)
+            if p95 > p05 and p95 > 0:
+                # Scale so 95th percentile maps to reasonable value (1.0-3.0 range)
+                scale_factor = 2.0 / p95
+                scaled = hdr_image * scale_factor
+                
+                # Apply very gentle gamma correction to improve appearance
+                gentle_gamma = np.power(np.clip(scaled, 0, 10), 0.8)
+                
+                logger.info(f"{algorithm_name} after gentle processing: [{gentle_gamma.min():.6f}, {gentle_gamma.max():.6f}]")
+                return gentle_gamma.astype(np.float32)
+            else:
+                # Fallback for edge cases
+                return np.clip(hdr_image, 0.0, 10.0).astype(np.float32)
             
         except Exception as e:
-            logger.error(f"Tone mapping failed for {algorithm_name}: {e}")
-            # Fallback: simple normalization
-            if hdr_image.max() > 0:
-                normalized = hdr_image / np.percentile(hdr_image, 95)
-                return np.clip(normalized, 0.0, 5.0).astype(np.float32)
-            return hdr_image.astype(np.float32)
+            logger.error(f"Gentle tone mapping failed for {algorithm_name}: {e}")
+            # Fallback: simple clipping
+            return np.clip(hdr_image, 0.0, 10.0).astype(np.float32)
     
     def _blend_ev0_based(self, images: List[np.ndarray], times: List[float]) -> np.ndarray:
         """
@@ -295,70 +300,86 @@ class DebevecHDRProcessor:
         # Convert all images to float for processing
         float_images = [img.astype(np.float32) / 255.0 for img in images]
         
-        # Create luminance masks for blending
-        ev0_gray = cv2.cvtColor(ev0_base, cv2.COLOR_RGB2GRAY)
+        # Create luminance masks for blending - use BGR format (as images come in BGR)
+        if ev0_base.shape[2] == 3:
+            # Convert BGR to grayscale for luminance calculation
+            ev0_gray = cv2.cvtColor(ev0_base, cv2.COLOR_BGR2GRAY)
+        else:
+            ev0_gray = ev0_base[:, :, 0]  # Fallback
         
         # Start with EV0 as the base result
         result = ev0_base.copy()
         
         # Blend highlights from underexposed images (better highlight detail)
         for i in range(ev0_idx + 1, len(float_images)):
+            if i >= len(float_images):
+                continue
+                
             img = float_images[i]
             
             # Create highlight mask - where EV0 is bright but this image has detail
-            highlight_mask = self._create_highlight_mask(ev0_gray)
+            highlight_mask = self._create_highlight_mask(ev0_gray, threshold=0.8)  # Higher threshold
             
-            # Blend highlight areas
-            for c in range(3):  # RGB channels
-                result[:, :, c] = (1 - highlight_mask) * result[:, :, c] + highlight_mask * img[:, :, c]
+            # Gentle blending with reduced strength
+            blend_strength = 0.3  # Reduce blend strength to 30%
+            
+            # Blend highlight areas with reduced strength
+            for c in range(min(3, result.shape[2])):  # RGB/BGR channels
+                result[:, :, c] = (1 - highlight_mask * blend_strength) * result[:, :, c] + (highlight_mask * blend_strength) * img[:, :, c]
                 
-            logger.info(f"Blended highlights from underexposed image {i}")
+            logger.info(f"Gently blended highlights from underexposed image {i} (strength: {blend_strength})")
         
         # Blend shadows from overexposed images (better shadow detail)  
         for i in range(ev0_idx):
+            if i < 0:
+                continue
+                
             img = float_images[i]
             
             # Create shadow mask - where EV0 is dark but this image has detail
-            shadow_mask = self._create_shadow_mask(ev0_gray)
+            shadow_mask = self._create_shadow_mask(ev0_gray, threshold=0.2)  # Lower threshold
             
-            # Blend shadow areas
-            for c in range(3):  # RGB channels
-                result[:, :, c] = (1 - shadow_mask) * result[:, :, c] + shadow_mask * img[:, :, c]
+            # Gentle blending with reduced strength
+            blend_strength = 0.3  # Reduce blend strength to 30%
+            
+            # Blend shadow areas with reduced strength
+            for c in range(min(3, result.shape[2])):  # RGB/BGR channels
+                result[:, :, c] = (1 - shadow_mask * blend_strength) * result[:, :, c] + (shadow_mask * blend_strength) * img[:, :, c]
                 
-            logger.info(f"Blended shadows from overexposed image {i}")
-        
-        # Convert back to 0-255 range for consistency with other algorithms
-        result_8bit = np.clip(result * 255.0, 0, 255).astype(np.uint8)
+            logger.info(f"Gently blended shadows from overexposed image {i} (strength: {blend_strength})")
         
         logger.info("Natural Blend completed - appearance preserved with enhanced dynamic range")
         
-        return result_8bit.astype(np.float32) / 255.0  # Return as float32 in 0-1 range
+        # Return in float32 format (0-1 range) for consistency
+        return np.clip(result, 0.0, 1.0).astype(np.float32)
     
-    def _create_highlight_mask(self, gray_image: np.ndarray, threshold: float = 0.7) -> np.ndarray:
+    def _create_highlight_mask(self, gray_image: np.ndarray, threshold: float = 0.8) -> np.ndarray:
         """Create a mask for highlight areas that need detail recovery"""
         # Smooth transition for highlights
         mask = np.zeros_like(gray_image, dtype=np.float32)
         
         # Areas above threshold get progressively more blending
         bright_areas = gray_image > threshold
-        mask[bright_areas] = (gray_image[bright_areas] - threshold) / (1.0 - threshold)
+        if np.any(bright_areas):
+            mask[bright_areas] = (gray_image[bright_areas] - threshold) / (1.0 - threshold)
         
-        # Smooth the mask to avoid harsh transitions
-        mask = cv2.GaussianBlur(mask, (21, 21), 0)
+        # Smooth the mask to avoid harsh transitions with larger kernel
+        mask = cv2.GaussianBlur(mask, (41, 41), 0)
         
         return np.clip(mask, 0, 1)
     
-    def _create_shadow_mask(self, gray_image: np.ndarray, threshold: float = 0.3) -> np.ndarray:
+    def _create_shadow_mask(self, gray_image: np.ndarray, threshold: float = 0.2) -> np.ndarray:
         """Create a mask for shadow areas that need detail recovery"""
         # Smooth transition for shadows
         mask = np.zeros_like(gray_image, dtype=np.float32)
         
         # Areas below threshold get progressively more blending
         dark_areas = gray_image < threshold
-        mask[dark_areas] = (threshold - gray_image[dark_areas]) / threshold
+        if np.any(dark_areas):
+            mask[dark_areas] = (threshold - gray_image[dark_areas]) / threshold
         
-        # Smooth the mask to avoid harsh transitions
-        mask = cv2.GaussianBlur(mask, (21, 21), 0)
+        # Smooth the mask to avoid harsh transitions with larger kernel
+        mask = cv2.GaussianBlur(mask, (41, 41), 0)
         
         return np.clip(mask, 0, 1)
 
@@ -413,10 +434,11 @@ class LuminanceStackProcessor3Stops:
             Tuple containing merged HDR image
         """
         try:
-            # Convert tensors to OpenCV format
-            img_plus_2 = tensor_to_cv2(ev_plus_2)
-            img_0 = tensor_to_cv2(ev_0)
-            img_minus_2 = tensor_to_cv2(ev_minus_2)
+            # Convert tensors to OpenCV format - apply gamma correction only for certain algorithms
+            apply_gamma = hdr_algorithm in ["debevec", "robertson"]
+            img_plus_2 = tensor_to_cv2(ev_plus_2, apply_gamma_correction=apply_gamma)
+            img_0 = tensor_to_cv2(ev_0, apply_gamma_correction=apply_gamma)
+            img_minus_2 = tensor_to_cv2(ev_minus_2, apply_gamma_correction=apply_gamma)
             
             # Calculate exposure times based on EV values
             # EV difference formula: time = base_time * 2^(-EV_difference)
@@ -499,12 +521,13 @@ class LuminanceStackProcessor5Stops:
             Tuple containing merged HDR image
         """
         try:
-            # Convert tensors to OpenCV format
-            img_plus_4 = tensor_to_cv2(ev_plus_4)
-            img_plus_2 = tensor_to_cv2(ev_plus_2)
-            img_0 = tensor_to_cv2(ev_0)
-            img_minus_2 = tensor_to_cv2(ev_minus_2)
-            img_minus_4 = tensor_to_cv2(ev_minus_4)
+            # Convert tensors to OpenCV format - apply gamma correction only for certain algorithms
+            apply_gamma = hdr_algorithm in ["debevec", "robertson"]
+            img_plus_4 = tensor_to_cv2(ev_plus_4, apply_gamma_correction=apply_gamma)
+            img_plus_2 = tensor_to_cv2(ev_plus_2, apply_gamma_correction=apply_gamma)
+            img_0 = tensor_to_cv2(ev_0, apply_gamma_correction=apply_gamma)
+            img_minus_2 = tensor_to_cv2(ev_minus_2, apply_gamma_correction=apply_gamma)
+            img_minus_4 = tensor_to_cv2(ev_minus_4, apply_gamma_correction=apply_gamma)
             
             # Calculate exposure times based on EV values
             base_time = 1.0 / 60.0  # 1/60s as base exposure
