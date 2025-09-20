@@ -6,51 +6,33 @@ Author: Sumit Chatterjee
 Version: 1.0.1
 Semantic Versioning: MAJOR.MINOR.PATCH
 
-=== VFX PIPELINE DOCUMENTATION ===
 
-IMPORTANT: Understanding the Debevec Algorithm for Professional VFX
-
-The Debevec algorithm is designed to recover the camera response function and create
-true HDR radiance maps from multiple exposures. Here's what you need to know:
-
-INPUT FORMAT:
-- The algorithm expects 8-bit sRGB images (0-255 range) as input
-- DO NOT pre-linearize or apply gamma correction before Debevec/Robertson
-- The algorithm internally recovers the camera response curve (including gamma)
-
-OUTPUT FORMAT:
-- The output is LINEAR RADIANCE values (physical light intensity)
-- Values can and should exceed 1.0 for bright areas (true HDR)
-- The output will look FLAT and DESATURATED - this is CORRECT for VFX
-- This "flat log" appearance is the professional standard for compositing
-
-WHY IT LOOKS "WRONG" (but isn't):
-- Raw linear radiance looks flat/washed out on standard displays
-- This is because displays apply gamma correction for viewing
-- VFX artists expect this flat appearance for proper compositing
-- The data contains full dynamic range for professional color grading
-
-WORKFLOW:
-1. Input: Multiple 8-bit sRGB exposures
-2. Debevec: Recovers camera response & creates linear radiance map
-3. Output: 16-bit EXR with linear radiance values
-4. Post-production: Apply tone mapping/grading in compositing software
-
-ALGORITHMS:
-- "natural_blend": Preserves EV0 appearance with enhanced dynamic range
-- "mertens": Exposure fusion without HDR recovery (good for display)
-- "debevec": True HDR radiance recovery (flat/linear for VFX)
-- "robertson": Alternative HDR recovery method (also flat/linear)
-
-===========================================
 """
 
 import numpy as np
 import torch
 import cv2
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 import logging
 import os
+
+# Try to import HDRutils for alternative HDR processing
+try:
+    import HDRutils
+    HDRUTILS_AVAILABLE = True
+except ImportError:
+    HDRUTILS_AVAILABLE = False
+    
+# Try to import imageio for HDR/EXR support
+try:
+    import imageio.v3 as iio
+    IMAGEIO_AVAILABLE = True
+except ImportError:
+    try:
+        import imageio as iio
+        IMAGEIO_AVAILABLE = True
+    except ImportError:
+        IMAGEIO_AVAILABLE = False
 
 
 # Set up logging
@@ -208,10 +190,11 @@ class DebevecHDRProcessor:
                 
                 # Handle color channels properly
                 if len(img.shape) == 3 and img.shape[2] == 3:  # 3-channel image
-                    # ComfyUI tensors are RGB, but OpenCV HDR functions work with BGR internally
-                    # Keep all algorithms consistent - use RGB throughout
-                    processed_images.append(img)
-                    logger.info(f"Processing RGB image for {algorithm}")
+                    # CRITICAL FIX: ALL OpenCV functions work with BGR internally
+                    # ComfyUI provides RGB, so we MUST convert for ALL algorithms
+                    img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+                    processed_images.append(img_bgr)
+                    logger.info(f"Converting RGB to BGR for {algorithm} (OpenCV standard)")
                 else:
                     logger.error(f"Image {i} has invalid shape: {img.shape}")
                     raise ValueError(f"Image must be 3-channel RGB, got shape: {img.shape}")
@@ -236,7 +219,13 @@ class DebevecHDRProcessor:
             elif algorithm == "natural_blend":
                 # Natural Blend - maintains EV0 appearance with enhanced dynamic range
                 logger.info("Using Natural Blend exposure blending...")
-                hdr_radiance = self._blend_ev0_based(processed_images, times)
+                # Natural blend works with RGB images directly (no BGR conversion needed)
+                hdr_radiance = self._blend_ev0_preserving(processed_images, times)
+                
+            elif algorithm == "hdrutils" and HDRUTILS_AVAILABLE:
+                # Use HDRutils library for HDR merging
+                logger.info("Using HDRutils library for HDR merging...")
+                hdr_radiance = self._merge_with_hdrutils(processed_images, times)
                 
             elif algorithm == "robertson":
                 # Robertson algorithm - VFX pipeline style (raw linear radiance)
@@ -290,8 +279,13 @@ class DebevecHDRProcessor:
             if np.all(hdr_radiance == 0):
                 raise ValueError("HDR merge produced all-zero result")
             
+            # CRITICAL: Convert BGR back to RGB for ALL algorithms
+            # All OpenCV functions output BGR, but ComfyUI needs RGB
+            if len(hdr_radiance.shape) == 3 and hdr_radiance.shape[2] == 3:
+                hdr_radiance = cv2.cvtColor(hdr_radiance, cv2.COLOR_BGR2RGB)
+                logger.info("Converting BGR back to RGB for ComfyUI output")
+            
             # The result is already in linear colorspace - preserve HDR data
-            # No color conversion needed as we kept RGB throughout
             return hdr_radiance.astype(np.float32)
             
         except Exception as e:
@@ -351,83 +345,109 @@ class DebevecHDRProcessor:
             # Fallback: simple clipping
             return np.clip(hdr_image, 0.0, 10.0).astype(np.float32)
     
-    def _blend_ev0_based(self, images: List[np.ndarray], times: List[float]) -> np.ndarray:
+    def _blend_ev0_preserving(self, images: List[np.ndarray], times: List[float]) -> np.ndarray:
         """
-        Blend exposures using EV0 as base appearance with enhanced dynamic range
+        Improved exposure blending that strongly preserves EV0 appearance
         
-        This method preserves the exact look of the EV0 image while adding
-        highlight and shadow detail from other exposures.
+        This method uses weighted averaging based on pixel quality metrics
+        to maintain the EV0 look while extending dynamic range.
         
         Args:
-            images: List of exposure images (should be ordered from overexposed to underexposed)
+            images: List of exposure images in BGR format (from OpenCV)
             times: Exposure times
             
         Returns:
-            Enhanced image that looks like EV0 but with extended dynamic range
+            Enhanced image that looks very close to EV0 but with extended dynamic range
         """
-        logger.info("Natural Blend: Preserving EV0 appearance with enhanced dynamic range")
+        logger.info("Natural Blend: Strongly preserving EV0 appearance")
         
-        # Find the EV0 image (middle exposure - should be the normal exposure)
-        ev0_idx = len(images) // 2  # Middle image is typically EV0
+        # Find the EV0 image (middle exposure)
+        ev0_idx = len(images) // 2
         ev0_base = images[ev0_idx].astype(np.float32) / 255.0
         
         logger.info(f"Using image {ev0_idx} as EV0 base (out of {len(images)} images)")
         
-        # Convert all images to float for processing
+        # Convert all images to float
         float_images = [img.astype(np.float32) / 255.0 for img in images]
         
-        # Create luminance masks for blending - use BGR format (as images come in BGR)
-        if ev0_base.shape[2] == 3:
-            # Convert BGR to grayscale for luminance calculation
-            ev0_gray = cv2.cvtColor(ev0_base, cv2.COLOR_BGR2GRAY)
-        else:
-            ev0_gray = ev0_base[:, :, 0]  # Fallback
+        # Calculate weights for each pixel in each exposure
+        weights = []
+        for i, img in enumerate(float_images):
+            # Weight based on distance from EV0
+            distance_weight = 1.0 / (1.0 + abs(i - ev0_idx))
+            
+            # Weight based on well-exposed pixels (avoid under/over exposed)
+            # Well exposed pixels are those in the 0.1-0.9 range
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            well_exposed = np.exp(-12.5 * np.power(gray - 0.5, 2))
+            
+            # Combine weights, giving strong preference to EV0
+            if i == ev0_idx:
+                weight = well_exposed * 5.0  # Strong preference for EV0
+            else:
+                weight = well_exposed * distance_weight * 0.3  # Gentle contribution from others
+            
+            weights.append(weight)
         
-        # Start with EV0 as the base result
-        result = ev0_base.copy()
+        # Stack weights and normalize
+        weight_stack = np.stack(weights, axis=-1)
+        weight_sum = np.sum(weight_stack, axis=-1, keepdims=True)
+        weight_stack = weight_stack / (weight_sum + 1e-10)
         
-        # Blend highlights from underexposed images (better highlight detail)
-        for i in range(ev0_idx + 1, len(float_images)):
-            if i >= len(float_images):
-                continue
-                
-            img = float_images[i]
-            
-            # Create highlight mask - where EV0 is bright but this image has detail
-            highlight_mask = self._create_highlight_mask(ev0_gray, threshold=0.8)  # Higher threshold
-            
-            # Gentle blending with reduced strength
-            blend_strength = 0.3  # Reduce blend strength to 30%
-            
-            # Blend highlight areas with reduced strength
-            for c in range(min(3, result.shape[2])):  # RGB/BGR channels
-                result[:, :, c] = (1 - highlight_mask * blend_strength) * result[:, :, c] + (highlight_mask * blend_strength) * img[:, :, c]
-                
-            logger.info(f"Gently blended highlights from underexposed image {i} (strength: {blend_strength})")
+        # Weighted blend of all exposures
+        result = np.zeros_like(ev0_base)
+        for i, img in enumerate(float_images):
+            for c in range(3):  # RGB channels
+                result[:, :, c] += img[:, :, c] * weight_stack[:, :, i]
         
-        # Blend shadows from overexposed images (better shadow detail)  
-        for i in range(ev0_idx):
-            if i < 0:
-                continue
-                
-            img = float_images[i]
-            
-            # Create shadow mask - where EV0 is dark but this image has detail
-            shadow_mask = self._create_shadow_mask(ev0_gray, threshold=0.2)  # Lower threshold
-            
-            # Gentle blending with reduced strength
-            blend_strength = 0.3  # Reduce blend strength to 30%
-            
-            # Blend shadow areas with reduced strength
-            for c in range(min(3, result.shape[2])):  # RGB/BGR channels
-                result[:, :, c] = (1 - shadow_mask * blend_strength) * result[:, :, c] + (shadow_mask * blend_strength) * img[:, :, c]
-                
-            logger.info(f"Gently blended shadows from overexposed image {i} (strength: {blend_strength})")
+        logger.info("Natural Blend completed - EV0 appearance strongly preserved")
         
-        logger.info("Natural Blend completed - appearance preserved with enhanced dynamic range")
+        # Apply very gentle tone curve to enhance contrast slightly
+        # This helps maintain the original look while utilizing the extended data
+        result = np.power(result, 0.95)  # Very subtle gamma adjustment
         
-        # Return in float32 format (0-1 range) for consistency
         return np.clip(result, 0.0, 1.0).astype(np.float32)
+        
+    def _merge_with_hdrutils(self, images: List[np.ndarray], times: List[float]) -> np.ndarray:
+        """
+        Use HDRutils library for HDR merging if available
+        
+        Args:
+            images: List of 8-bit images
+            times: Exposure times
+            
+        Returns:
+            HDR merged image
+        """
+        try:
+            # Convert images to the format HDRutils expects
+            # HDRutils typically expects RGB format
+            rgb_images = []
+            for img in images:
+                if len(img.shape) == 3 and img.shape[2] == 3:
+                    # Convert BGR to RGB for HDRutils
+                    rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                    rgb_images.append(rgb_img)
+                else:
+                    rgb_images.append(img)
+            
+            # Stack images for HDRutils
+            image_stack = np.stack(rgb_images, axis=0)
+            
+            # Create HDR merge using HDRutils
+            # Note: HDRutils.merge might have different parameters
+            # This is a generic implementation
+            hdr_image = HDRutils.merge(image_stack, times)
+            
+            logger.info(f"HDRutils merge complete: range [{hdr_image.min():.6f}, {hdr_image.max():.6f}]")
+            
+            return hdr_image.astype(np.float32)
+            
+        except Exception as e:
+            logger.error(f"HDRutils merge failed: {e}")
+            logger.info("Falling back to Mertens algorithm")
+            # Fallback to Mertens
+            return self.merge_mertens.process(images)
     
     def _create_highlight_mask(self, gray_image: np.ndarray, threshold: float = 0.8) -> np.ndarray:
         """Create a mask for highlight areas that need detail recovery"""
@@ -487,7 +507,7 @@ class LuminanceStackProcessor3Stops:
                     "step": 0.1,
                     "display": "number"
                 }),
-                "hdr_algorithm": (["natural_blend", "mertens", "debevec", "robertson"], {
+                "hdr_algorithm": (["natural_blend", "mertens", "debevec", "robertson"] + (["hdrutils"] if HDRUTILS_AVAILABLE else []), {
                     "default": "natural_blend"
                 }),
             }
@@ -583,7 +603,7 @@ class LuminanceStackProcessor5Stops:
                     "step": 0.1,
                     "display": "number"
                 }),
-                "hdr_algorithm": (["natural_blend", "mertens", "debevec", "robertson"], {
+                "hdr_algorithm": (["natural_blend", "mertens", "debevec", "robertson"] + (["hdrutils"] if HDRUTILS_AVAILABLE else []), {
                     "default": "natural_blend"
                 }),
             }

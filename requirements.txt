@@ -4,8 +4,13 @@
 # Core dependency for HDR processing
 opencv-python>=4.8.0
 
-# Optional but recommended for better performance  
+# Optional but recommended for better performance
 opencv-contrib-python>=4.8.0
+
+# Alternative HDR processing libraries
+HDRutils>=0.2.0
+imageio>=2.31.0
+imageio-ffmpeg  # For HDR support in imageio
 
 # Development dependencies (optional)
 # pytest>=6.0.0
