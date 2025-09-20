@@ -1,0 +1,115 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "luminance-stack-processor"
+version = "1.0.0"
+description = "Professional HDR processing nodes for ComfyUI using the Debevec Algorithm"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "Sumit Chatterjee", email = "sumitchatterjee13@gmail.com" }
+]
+keywords = [
+    "comfyui", 
+    "custom-node", 
+    "hdr", 
+    "image-processing", 
+    "debevec-algorithm",
+    "exposure-fusion",
+    "computer-vision"
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Graphics :: Graphics Conversion",
+    "Topic :: Scientific/Engineering :: Image Processing",
+    "Topic :: Software Development :: Libraries :: Python Modules"
+]
+requires-python = ">=3.8"
+
+dependencies = [
+    "opencv-python>=4.8.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=6.0.0",
+    "black>=21.0.0", 
+    "flake8>=3.9.0",
+    "mypy>=0.910"
+]
+enhanced = [
+    "opencv-contrib-python>=4.8.0"
+]
+
+[project.urls]
+"Homepage" = "https://github.com/sumitchatterjee13/Luminance-Stack-Processor"
+"Bug Reports" = "https://github.com/sumitchatterjee13/Luminance-Stack-Processor/issues"
+"Source" = "https://github.com/sumitchatterjee13/Luminance-Stack-Processor"
+"Documentation" = "https://github.com/sumitchatterjee13/Luminance-Stack-Processor/blob/main/README.md"
+"Discussions" = "https://github.com/sumitchatterjee13/Luminance-Stack-Processor/discussions"
+"Changelog" = "https://github.com/sumitchatterjee13/Luminance-Stack-Processor/blob/main/CHANGELOG.md"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["luminance_stack_processor*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.md", "*.txt", "*.toml"]
+
+# Version management
+[tool.bumpversion]
+current_version = "1.0.0"
+parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
+serialize = ["{major}.{minor}.{patch}"]
+search = "{current_version}"
+replace = "{new_version}"
+
+[[tool.bumpversion.files]]
+filename = "version.py"
+search = '__version__ = "{current_version}"'
+replace = '__version__ = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = 'version = "{current_version}"'
+replace = 'version = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "README.md"
+search = "Version: {current_version}"
+replace = "Version: {new_version}"
+
+# Code formatting
+[tool.black]
+line-length = 100
+target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100

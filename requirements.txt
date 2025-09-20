@@ -1,0 +1,18 @@
+# Luminance Stack Processor - ComfyUI Custom Nodes
+# Required dependencies for HDR processing using Debevec Algorithm
+
+# Core dependency for HDR processing
+opencv-python>=4.8.0
+
+# Optional but recommended for better performance  
+opencv-contrib-python>=4.8.0
+
+# Development dependencies (optional)
+# pytest>=6.0.0
+# black>=21.0.0
+# flake8>=3.9.0
+
+# Notes:
+# - NumPy and PyTorch are provided by ComfyUI, no need to install separately
+# - Only OpenCV is required for the Debevec HDR algorithm implementation
+# - If you encounter issues, try: pip install opencv-python --upgrade
