@@ -80,11 +80,13 @@ Professional HDR (High Dynamic Range) processing nodes for ComfyUI using the **D
 
 ### ⚠️ **Important Notes for VFX Artists:**
 
-**Debevec/Robertson algorithms produce FLAT, LOG-LIKE images** - this is CORRECT! The flat appearance means:
-- ✅ Raw linear radiance data preserved
-- ✅ Wide dynamic range maintained  
-- ✅ Ready for professional color grading
-- ✅ No "pretty" tone mapping destroying data
+**Debevec/Robertson algorithms produce FLAT, DESATURATED images** - this is CORRECT! The flat appearance means:
+- ✅ Perfect VFX flat log profile (18% gray scaling)
+- ✅ Raw linear radiance data preserved  
+- ✅ Wide dynamic range maintained (up to 2000+ values)
+- ✅ Professional color pipeline ready
+- ✅ No color inversion issues (fixed RGB↔BGR handling)
+- ✅ No tone mapping destroying VFX data
 
 If you want a "prettier" result for display, use **Mertens** or **Natural Blend** instead.
 

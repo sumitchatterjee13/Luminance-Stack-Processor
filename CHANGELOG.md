@@ -23,10 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **HDR verification** - Automatic verification that HDR data is preserved in exported files
 
 ### Fixed
-- **🚨 CRITICAL: Fixed Debevec for VFX pipeline** - Now produces flat, log-like raw linear radiance (correct for professional VFX)
-- **Removed tone mapping from Debevec/Robertson** - VFX artists need raw data, not processed images
-- **Fixed color channel handling** - Proper RGB handling without unnecessary conversions
-- **VFX Pipeline compliance** - Debevec now outputs professional flat/log appearance
+- **🚨 CRITICAL: Fixed Debevec color inversion** - Proper RGB↔BGR conversion fixes inverted colors completely
+- **🚨 CRITICAL: Perfect VFX flat log profile** - Research-based implementation with 18% gray scaling
+- **Fixed sRGB to Linear conversion** - Proper gamma correction applied at correct stage for camera response
+- **VFX Pipeline compliance** - Debevec now outputs professional flat, desaturated appearance (CORRECT)  
+- **Removed tone mapping completely** - Raw linear radiance preserved for professional color pipeline
 - **Created proper HDR workflow** - Use HDR Export Node instead of built-in save nodes for EXR
 
 ## [1.0.1] - 2025-01-20

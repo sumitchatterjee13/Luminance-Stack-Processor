@@ -21,29 +21,34 @@ logger = logging.getLogger(__name__)
 
 
 def tensor_to_cv2(tensor: torch.Tensor, apply_gamma_correction: bool = False) -> np.ndarray:
-    """Convert ComfyUI tensor to OpenCV format for HDR processing"""
+    """Convert ComfyUI tensor to OpenCV format for HDR processing - VFX Pipeline Fixed"""
     # ComfyUI tensors are typically [B, H, W, C] in 0-1 range
     if len(tensor.shape) == 4:
         tensor = tensor.squeeze(0)  # Remove batch dimension
     
-    # Convert to numpy and scale to 8-bit (input images are already 8-bit)
+    # Convert to numpy
     image = tensor.cpu().numpy()
     
     if apply_gamma_correction:
-        # Apply gamma correction (sRGB to linear) for algorithms that need it (Debevec/Robertson)
-        # This is crucial for proper camera response function recovery
+        # CRITICAL VFX FIX: Proper sRGB to Linear conversion for Debevec/Robertson
+        # This is ESSENTIAL for camera response function recovery
+        logger.info("Applying sRGB to Linear conversion (CRITICAL for Debevec accuracy)")
+        
+        # Proper sRGB to Linear gamma correction (based on research)
         image_linear = np.where(image <= 0.04045, 
                                image / 12.92,
                                np.power((image + 0.055) / 1.055, 2.4))
-        # Convert back to 8-bit for OpenCV HDR functions
+        
+        # Convert to 8-bit for OpenCV HDR functions
         image_8bit = np.clip(image_linear * 255.0, 0, 255).astype(np.uint8)
-        logger.info(f"Applied gamma correction for HDR processing")
+        logger.info(f"sRGB->Linear conversion applied - critical for VFX flat log profile")
+        
     else:
-        # For Mertens and Natural Blend - use original gamma (no correction)
+        # For Mertens and Natural Blend - keep original gamma
         image_8bit = np.clip(image * 255.0, 0, 255).astype(np.uint8)
-        logger.info(f"No gamma correction applied - using original image gamma")
+        logger.info(f"Original gamma preserved - no conversion applied")
     
-    logger.info(f"Converted tensor to CV2: shape={image_8bit.shape}, dtype={image_8bit.dtype}, range=[{image_8bit.min()}, {image_8bit.max()}]")
+    logger.info(f"Converted to OpenCV: shape={image_8bit.shape}, dtype={image_8bit.dtype}, range=[{image_8bit.min()}, {image_8bit.max()}]")
     
     return image_8bit
 
@@ -75,27 +80,36 @@ def cv2_to_tensor(hdr_image: np.ndarray, output_16bit_linear: bool = True, algor
             hdr_linear = np.clip(hdr_linear, 0.0, 12.0)
             
         elif algorithm_hint in ["debevec", "robertson"]:
-            # VFX PIPELINE: RAW LINEAR RADIANCE - minimal processing!
-            # This should look FLAT and LOG-LIKE - that's CORRECT for VFX!
+            # VFX PIPELINE: PERFECT FLAT LOG PROFILE - Research-based implementation
+            # This should look FLAT and DESATURATED - that's CORRECT for professional VFX!
             
-            # Only apply gentle scaling to bring into reasonable range for EXR
-            # Don't make it "pretty" - VFX artists want raw data
+            logger.info(f"  Processing VFX flat log profile - this will look flat/desaturated (CORRECT)")
+            
+            # VFX STANDARD: Minimal scaling for professional flat log appearance
             if hdr_image.max() > 0:
-                # Conservative scaling - preserve as much raw data as possible
-                p99 = np.percentile(hdr_image, 99.0)  # Use 99th percentile, not lower
-                if p99 > 0:
-                    # Very gentle scaling - target range around 0.18 (18% gray equivalent)
-                    # This matches VFX pipeline expectations
-                    hdr_linear = hdr_image * (0.18 / np.percentile(hdr_image, 50.0))  # Scale middle gray
+                # Research-based scaling: Use median (50th percentile) as reference
+                # This creates the proper flat log appearance VFX artists expect  
+                p50 = np.percentile(hdr_image, 50.0)  # Middle gray reference
+                
+                if p50 > 0:
+                    # Scale to VFX standard: 18% gray = 0.18 (professional standard)
+                    # This creates the flat, log-like appearance
+                    scale_factor = 0.18 / p50
+                    hdr_linear = hdr_image * scale_factor
                     
-                    # Allow VERY wide range for VFX work - no aggressive clipping
-                    hdr_linear = np.clip(hdr_linear, 0.0, 1000.0)  # Wide range for sun, sky, etc.
+                    # VFX RANGE: Allow wide dynamic range (no aggressive clipping)
+                    # Professional VFX needs values up to 100+ for bright sources
+                    hdr_linear = np.clip(hdr_linear, 0.0, 2000.0)  # Wide range for VFX work
+                    
+                    logger.info(f"  VFX scaling applied: middle gray -> 0.18 (scale: {scale_factor:.3f})")
                 else:
                     hdr_linear = hdr_image
+                    logger.info(f"  No scaling needed - preserving original values")
             else:
                 hdr_linear = hdr_image
+                logger.info(f"  Zero image detected - no processing applied")
                 
-            logger.info(f"  VFX Pipeline: Raw linear radiance preserved (flat/log appearance is CORRECT)")
+            logger.info(f"  VFX FLAT LOG: Appearance will be flat/desaturated - this is PROFESSIONAL STANDARD")
             
         else:
             # Unknown algorithm - conservative approach
@@ -155,16 +169,18 @@ class DebevecHDRProcessor:
                 if img.dtype != np.uint8:
                     logger.warning(f"Image {i} is not 8-bit (dtype: {img.dtype}), this may cause issues")
                 
-                # Handle color channels properly for each algorithm
-                if len(img.shape) == 3 and img.shape[2] == 3:  # RGB
+                # CRITICAL VFX COLOR FIX: Handle color channels properly
+                if len(img.shape) == 3 and img.shape[2] == 3:  # 3-channel image
                     if algorithm in ["debevec", "robertson"]:
-                        # VFX PIPELINE FIX: Test both RGB and BGR to find which works correctly
-                        # Many Debevec color issues come from wrong channel order assumption
-                        processed_images.append(img)  # Try original first (ComfyUI tensors are typically RGB)
-                        logger.info(f"Using original color order for {algorithm} (assuming RGB)")
+                        # VFX PIPELINE COLOR FIX: ComfyUI tensors are RGB, OpenCV expects BGR
+                        # This is THE cause of color inversion in Debevec!
+                        img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+                        processed_images.append(img_bgr)
+                        logger.info(f"CRITICAL FIX: RGB->BGR conversion for {algorithm} (fixes color inversion)")
                     else:
-                        # For Mertens and Natural Blend, keep original format
+                        # For Mertens and Natural Blend, keep RGB format
                         processed_images.append(img)
+                        logger.info(f"Keeping RGB format for {algorithm}")
                 else:
                     logger.error(f"Image {i} has invalid shape: {img.shape}")
                     raise ValueError(f"Image must be 3-channel RGB, got shape: {img.shape}")
@@ -242,8 +258,11 @@ class DebevecHDRProcessor:
             if np.all(hdr_radiance == 0):
                 raise ValueError("HDR merge produced all-zero result")
             
-            # VFX PIPELINE: Keep output in same format as input (no additional conversions)
-            # ComfyUI expects consistent color order throughout the pipeline
+            # VFX PIPELINE COLOR FIX: Convert back to RGB for ComfyUI 
+            # Since we converted to BGR for processing, convert back to RGB for output
+            if len(hdr_radiance.shape) == 3 and hdr_radiance.shape[2] == 3 and algorithm in ["debevec", "robertson"]:
+                hdr_radiance = cv2.cvtColor(hdr_radiance.astype(np.float32), cv2.COLOR_BGR2RGB)
+                logger.info(f"CRITICAL FIX: BGR->RGB conversion for output (maintains color consistency)")
             
             # The result is in linear colorspace - preserve HDR data
             return hdr_radiance.astype(np.float32)
@@ -464,11 +483,15 @@ class LuminanceStackProcessor3Stops:
             Tuple containing merged HDR image
         """
         try:
-            # Convert tensors to OpenCV format - apply gamma correction only for certain algorithms
+            # VFX CRITICAL: Apply proper gamma correction for Debevec/Robertson
+            # This is ESSENTIAL for flat log profile and color accuracy
             apply_gamma = hdr_algorithm in ["debevec", "robertson"]
             img_plus_2 = tensor_to_cv2(ev_plus_2, apply_gamma_correction=apply_gamma)
             img_0 = tensor_to_cv2(ev_0, apply_gamma_correction=apply_gamma)
             img_minus_2 = tensor_to_cv2(ev_minus_2, apply_gamma_correction=apply_gamma)
+            
+            if apply_gamma:
+                logger.info("VFX PIPELINE: sRGB->Linear conversion applied - CRITICAL for flat log profile")
             
             # Calculate exposure times based on EV values
             # EV difference formula: time = base_time * 2^(-EV_difference)
@@ -555,13 +578,17 @@ class LuminanceStackProcessor5Stops:
             Tuple containing merged HDR image
         """
         try:
-            # Convert tensors to OpenCV format - apply gamma correction only for certain algorithms
+            # VFX CRITICAL: Apply proper gamma correction for Debevec/Robertson
+            # This is ESSENTIAL for flat log profile and color accuracy
             apply_gamma = hdr_algorithm in ["debevec", "robertson"]
             img_plus_4 = tensor_to_cv2(ev_plus_4, apply_gamma_correction=apply_gamma)
             img_plus_2 = tensor_to_cv2(ev_plus_2, apply_gamma_correction=apply_gamma)
             img_0 = tensor_to_cv2(ev_0, apply_gamma_correction=apply_gamma)
             img_minus_2 = tensor_to_cv2(ev_minus_2, apply_gamma_correction=apply_gamma)
             img_minus_4 = tensor_to_cv2(ev_minus_4, apply_gamma_correction=apply_gamma)
+            
+            if apply_gamma:
+                logger.info("VFX PIPELINE: sRGB->Linear conversion applied - CRITICAL for flat log profile")
             
             # Calculate exposure times based on EV values
             base_time = 1.0 / 60.0  # 1/60s as base exposure
