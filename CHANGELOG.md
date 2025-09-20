@@ -16,15 +16,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Enhanced 16-bit linear output** - Improved scaling algorithm for better 16-bit range utilization
 - **Changed default algorithm** - Natural Blend is now default instead of Mertens for natural results
 
+### Added
+- **🆕 HDR Export Node** - Dedicated EXR export node that preserves full HDR dynamic range
+- **True HDR file output** - EXR files maintain values above 1.0 without normalization
+- **ComfyUI-style interface** - Filename prefix and output path inputs like built-in save nodes
+- **HDR verification** - Automatic verification that HDR data is preserved in exported files
+
 ### Fixed
-- **🚨 CRITICAL: Fixed HDR data completely broken** - Values were being normalized to 0-1 range, killing HDR!
-- **🚨 CRITICAL: Now outputs TRUE 16-bit HDR values** - Values go above 1.0 (up to 5-100 range) as required for HDR
-- **Fixed all algorithms looking the same** - Each algorithm now produces distinctly different outputs
-- **Algorithm-specific HDR scaling** - Natural Blend (1-8 range), Mertens (1-12 range), Debevec/Robertson (1-100 range)
-- **Preserved dynamic range data** - No more normalization destroying HDR information
-- **Enhanced visual differences** - Each algorithm produces visually different and useful results
-- **Fixed Natural Blend masking** - Better blending logic with 30% strength for natural transitions
-- **Algorithm-specific processing** - Gamma correction and color handling only where beneficial
+- **🚨 CRITICAL: Identified HDR export issue** - ComfyUI's built-in save nodes normalize to 0-1 range
+- **Reverted Debevec color inversion** - Restored working algorithm implementations
+- **Created proper HDR workflow** - Use HDR Export Node instead of built-in save nodes for EXR
+- **Algorithm differences working** - Confirmed algorithms produce different results as intended
 
 ## [1.0.1] - 2025-01-20
 

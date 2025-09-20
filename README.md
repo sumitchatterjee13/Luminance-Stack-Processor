@@ -12,18 +12,19 @@ Professional HDR (High Dynamic Range) processing nodes for ComfyUI using the **D
 
 ## 🎯 Features
 
-- **🚨 TRUE 16-bit HDR Output**: Values go above 1.0 (up to 100+) for authentic HDR data
-- **Four Distinct Algorithms**: Each produces different results with specific HDR ranges
-  - **Natural Blend** (1-8): EV0 appearance with enhanced dynamic range
-  - **Mertens** (1-12): Adobe Lightroom style results
-  - **Debevec** (1-100+): Maximum dynamic range for extreme lighting
-  - **Robertson** (1-80+): Alternative robust HDR processing
-- **Two Processing Modes**:
+- **🆕 HDR Export Node**: Dedicated EXR export that preserves full HDR dynamic range
+- **🚨 TRUE HDR Values Above 1.0**: Proper HDR data preservation in EXR files
+- **Four Distinct HDR Algorithms**: Each produces different visual results
+  - **Natural Blend**: EV0 appearance with enhanced dynamic range
+  - **Mertens**: Adobe Lightroom style exposure fusion
+  - **Debevec**: Classic HDR with maximum dynamic range
+  - **Robertson**: Alternative robust HDR processing
+- **Three Custom Nodes**:
   - **3-Stop Processor**: Merges EV+2, EV+0, EV-2 exposures
   - **5-Stop Processor**: Merges EV+4, EV+2, EV+0, EV-2, EV-4 exposures
-- **Linear Colorspace Preservation**: True 16-bit linear data with no normalization
-- **Visual Algorithm Differences**: Each algorithm produces noticeably different results
-- **ComfyUI Integration**: Seamless integration with proper HDR tensor handling
+  - **HDR Export**: Saves EXR files with preserved HDR data
+- **ComfyUI-Style Interface**: Filename and path inputs like built-in save nodes
+- **HDR Verification**: Automatic checking that HDR data is preserved in exports
 
 ## 📋 Requirements
 
@@ -71,45 +72,75 @@ Professional HDR (High Dynamic Range) processing nodes for ComfyUI using the **D
 
 ## 🎨 Usage
 
+### 🚨 **CRITICAL: Proper HDR Workflow**
+
+1. **HDR Processing**: Use "Luminance Stack Processor" nodes
+2. **🔥 HDR Export**: **ALWAYS** connect to "HDR Export to EXR" node  
+3. **❌ Never use ComfyUI's built-in save nodes** for HDR - they normalize to 0-1!
+
 ### Luminance Stack Processor (3 Stops)
 
 Perfect for standard HDR bracketing with 3 exposures:
 
 **Inputs:**
 - `ev_plus_2`: Overexposed image (+2 EV)
-- `ev_0`: Normal exposure image (0 EV)
+- `ev_0`: Normal exposure image (0 EV)  
 - `ev_minus_2`: Underexposed image (-2 EV)
 - `exposure_step`: (Optional) EV step size (default: 2.0)
-- `hdr_algorithm`: (Optional) Algorithm to use: "mertens" (default), "debevec", "robertson"
+- `hdr_algorithm`: Choose "natural_blend" (default), "mertens", "debevec", "robertson"
 
 **Output:**
-- `hdr_image`: Merged 16-bit linear HDR image
+- `hdr_image`: HDR tensor with values potentially above 1.0
+
+### HDR Export to EXR
+
+**REQUIRED for true HDR preservation:**
+
+**Inputs:**
+- `hdr_image`: HDR tensor from processing nodes
+- `filename_prefix`: Base filename (e.g., "My_HDR_Image")
+- `output_path`: Directory path (empty = ComfyUI output folder)
+
+**Output:**
+- `filepath`: Path to saved EXR file with preserved HDR values
 
 ### Luminance Stack Processor (5 Stops)
 
 For extended dynamic range with 5 exposures:
 
 **Inputs:**
-- `ev_plus_4`: Most overexposed image (+4 EV)
+- `ev_plus_4`: Overexposed image (+4 EV)
 - `ev_plus_2`: Overexposed image (+2 EV)
 - `ev_0`: Normal exposure image (0 EV)
 - `ev_minus_2`: Underexposed image (-2 EV)
-- `ev_minus_4`: Most underexposed image (-4 EV)
+- `ev_minus_4`: Underexposed image (-4 EV)
 - `exposure_step`: (Optional) EV step size (default: 2.0)
-- `hdr_algorithm`: (Optional) Algorithm to use: "mertens" (default), "debevec", "robertson"
+- `hdr_algorithm`: Choose "natural_blend" (default), "mertens", "debevec", "robertson"
 
 **Output:**
-- `hdr_image`: Merged 16-bit linear HDR image
+- `hdr_image`: HDR tensor with values potentially above 1.0
+
+### 📋 **Complete HDR Workflow Example:**
+
+1. **Load Images**: Load your bracketed exposures (3 or 5 images)
+2. **Add Processing Node**: "Luminance Stack Processor (3/5 Stops)"
+3. **Connect Exposures**: Connect each EV image to corresponding input
+4. **Choose Algorithm**: Select HDR algorithm (Natural Blend recommended)
+5. **Add Export Node**: "HDR Export to EXR" 
+6. **Connect HDR Output**: From processor to export node
+7. **Set Filename**: Enter desired filename prefix
+8. **Set Path**: Output directory (or leave empty for default)
+9. **Execute**: Get true HDR EXR file with values above 1.0!
 
 ## 🔬 How It Works
 
 The nodes implement **multiple HDR algorithms** with **Natural Blend** as the default (preserves natural appearance):
 
-1. **Analyzes Multiple Exposures**: Takes differently exposed 8-bit images of the same scene
-2. **Estimates Camera Response Function**: Determines how the camera sensor responds to light
-3. **Recovers Scene Radiance**: Calculates the actual light values in the scene
-4. **Merges to HDR**: Combines all exposures into a single high dynamic range image
-5. **Linear 16-bit Output**: Outputs 16-bit linear colorspace data preserving full HDR range
+1. **Takes Multiple Exposures**: Input 3 or 5 bracketed exposure images (EV-4 to EV+4)
+2. **Selects HDR Algorithm**: Choose between Natural Blend, Mertens, Debevec, or Robertson
+3. **Processes HDR Data**: Merges exposures preserving dynamic range above 1.0
+4. **Outputs HDR Tensor**: 16-bit linear data ready for EXR export
+5. **🚨 CRITICAL: Use HDR Export Node**: ComfyUI's built-in save nodes normalize to 0-1, use our HDR Export for true EXR
 
 ### 🎯 **HDR Algorithm Options:**
 

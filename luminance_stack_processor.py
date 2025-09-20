@@ -163,45 +163,29 @@ class DebevecHDRProcessor:
             logger.info(f"Image formats: {[img.shape for img in processed_images]}")
             logger.info(f"Image dtypes: {[img.dtype for img in processed_images]}")
             
-            # Process using selected algorithm - each should produce DIFFERENT outputs
+            # Process using selected algorithm
             if algorithm == "mertens":
-                # Mertens Exposure Fusion - Adobe Lightroom style
+                # Mertens Exposure Fusion - uses original gamma, no correction needed
                 logger.info("Using Mertens Exposure Fusion algorithm...")
                 hdr_radiance = self.merge_mertens.process(processed_images)
-                
-                logger.info(f"Mertens raw output range: [{hdr_radiance.min():.6f}, {hdr_radiance.max():.6f}]")
-                
-                # Mertens produces natural results, enhance for HDR without breaking appearance
+                # Mertens output is typically in 0-1 range, gently scale for HDR
                 if hdr_radiance.max() <= 1.0:
-                    # Boost but keep natural look - this should make it DIFFERENT from other algorithms
-                    hdr_radiance = hdr_radiance * 2.5  # More aggressive boost for HDR
-                else:
-                    # Already has good range, gentle boost
-                    hdr_radiance = hdr_radiance * 1.8
+                    hdr_radiance = hdr_radiance * 1.5  # Gentle boost, preserve contrast
                     
             elif algorithm == "natural_blend":
-                # Natural Blend - EV0 appearance but this should be DIFFERENT from Mertens
+                # Natural Blend - maintains EV0 appearance with enhanced dynamic range
                 logger.info("Using Natural Blend exposure blending...")
                 hdr_radiance = self._blend_ev0_based(processed_images, times)
                 
-                logger.info(f"Natural Blend raw output range: [{hdr_radiance.min():.6f}, {hdr_radiance.max():.6f}]")
-                
-                # Natural blend should maintain EV0 look but add HDR data
-                # This should produce DIFFERENT results from Mertens
-                hdr_radiance = hdr_radiance * 1.2  # Gentle boost to add HDR headroom
-                
             elif algorithm == "robertson":
-                # Robertson algorithm - should be DIFFERENT from Debevec
+                # Robertson algorithm - alternative to Debevec
                 logger.info("Using Robertson algorithm...")
                 response = self.calibrator_robertson.process(processed_images, times)
                 hdr_radiance = self.merge_robertson.process(processed_images, times, response)
-                
-                logger.info(f"Robertson raw output range: [{hdr_radiance.min():.6f}, {hdr_radiance.max():.6f}]")
-                
-                # Apply minimal processing - this should be DIFFERENT from Debevec
+                # Apply minimal tone mapping to preserve HDR range
                 hdr_radiance = self._gentle_tone_map(hdr_radiance, "Robertson")
                 
-            else:  # Default to Debevec - should be DIFFERENT from Robertson
+            else:  # Default to Debevec
                 # Estimate camera response function using Debevec method
                 logger.info("Using Debevec algorithm...")
                 response = self.calibrator.process(processed_images, times)
@@ -209,10 +193,7 @@ class DebevecHDRProcessor:
                 
                 # Merge images into HDR using Debevec algorithm
                 hdr_radiance = self.merge_debevec.process(processed_images, times, response)
-                
-                logger.info(f"Debevec raw output range: [{hdr_radiance.min():.6f}, {hdr_radiance.max():.6f}]")
-                
-                # Apply minimal processing - should produce DIFFERENT results from Robertson
+                # Apply minimal tone mapping to preserve HDR range
                 hdr_radiance = self._gentle_tone_map(hdr_radiance, "Debevec")
             
             # Validate HDR output
@@ -369,10 +350,8 @@ class DebevecHDRProcessor:
         
         logger.info("Natural Blend completed - appearance preserved with enhanced dynamic range")
         
-        # Return in float32 format - DO NOT CLIP TO 0-1! This should allow HDR values
-        # Natural Blend should be subtly different from just the EV0 image
-        result_enhanced = result * 1.1  # Small boost to differentiate from pure EV0
-        return np.clip(result_enhanced, 0.0, 5.0).astype(np.float32)  # Allow values above 1.0
+        # Return in float32 format (0-1 range) for consistency
+        return np.clip(result, 0.0, 1.0).astype(np.float32)
     
     def _create_highlight_mask(self, gray_image: np.ndarray, threshold: float = 0.8) -> np.ndarray:
         """Create a mask for highlight areas that need detail recovery"""
@@ -586,14 +565,154 @@ class LuminanceStackProcessor5Stops:
             return (ev_0,)
 
 
+class HDRExportNode:
+    """
+    ComfyUI Custom Node for exporting HDR images to EXR format
+    Preserves full dynamic range data without normalization
+    """
+    
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "hdr_image": ("IMAGE", {"tooltip": "HDR image tensor with values potentially above 1.0"}),
+                "filename_prefix": ("STRING", {"default": "HDR_Export", "tooltip": "Filename prefix for the EXR file"}),
+                "output_path": ("STRING", {"default": "", "tooltip": "Output directory (leave empty for ComfyUI output folder)"}),
+            }
+        }
+    
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("filepath",)
+    FUNCTION = "export_hdr"
+    CATEGORY = "Luminance Stack Processor"
+    OUTPUT_NODE = True
+    
+    def export_hdr(self, hdr_image: torch.Tensor, filename_prefix: str = "HDR_Export", output_path: str = ""):
+        """
+        Export HDR image to EXR format preserving full dynamic range
+        
+        Args:
+            hdr_image: HDR image tensor (potentially with values > 1.0)
+            filename_prefix: Base filename for the output
+            output_path: Output directory path
+            
+        Returns:
+            Tuple containing the filepath of saved EXR
+        """
+        try:
+            # Convert tensor to numpy array
+            if len(hdr_image.shape) == 4:
+                hdr_image = hdr_image.squeeze(0)  # Remove batch dimension
+            
+            hdr_array = hdr_image.cpu().numpy()
+            
+            logger.info(f"HDR Export: Input range [{hdr_array.min():.6f}, {hdr_array.max():.6f}]")
+            logger.info(f"HDR Export: Shape {hdr_array.shape}, dtype {hdr_array.dtype}")
+            
+            # Determine output path
+            if not output_path or output_path.strip() == "":
+                # Use ComfyUI's output directory
+                try:
+                    import folder_paths
+                    output_dir = folder_paths.get_output_directory()
+                except ImportError:
+                    # Fallback if folder_paths module doesn't exist
+                    output_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "output")
+                except Exception:
+                    # Secondary fallback
+                    import os as os_module
+                    output_dir = os_module.path.join(os_module.getcwd(), "output")
+            else:
+                output_dir = output_path.strip()
+            
+            # Create output directory if it doesn't exist
+            os.makedirs(output_dir, exist_ok=True)
+            
+            # Generate unique filename with timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"{filename_prefix}_{timestamp}.exr"
+            filepath = os.path.join(output_dir, filename)
+            
+            logger.info(f"HDR Export: Saving to {filepath}")
+            
+            # Convert BGR to RGB if needed (OpenCV uses BGR)
+            if len(hdr_array.shape) == 3 and hdr_array.shape[2] == 3:
+                # Assume ComfyUI tensors are RGB, but OpenCV expects BGR for writing
+                hdr_bgr = cv2.cvtColor(hdr_array.astype(np.float32), cv2.COLOR_RGB2BGR)
+            else:
+                hdr_bgr = hdr_array.astype(np.float32)
+            
+            # Save as EXR using OpenCV - this preserves HDR data!
+            success = cv2.imwrite(filepath, hdr_bgr)
+            
+            if success:
+                # Verify the saved file
+                saved_stats = self._get_file_stats(filepath)
+                logger.info(f"HDR Export: Successfully saved EXR")
+                logger.info(f"  File: {filepath}")
+                logger.info(f"  Size: {saved_stats['size_mb']:.2f} MB")
+                logger.info(f"  Dimensions: {saved_stats['width']}x{saved_stats['height']}")
+                logger.info(f"  Channels: {saved_stats['channels']}")
+                
+                # Verify HDR values are preserved
+                test_read = cv2.imread(filepath, cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
+                if test_read is not None:
+                    logger.info(f"  Verification: Saved range [{test_read.min():.6f}, {test_read.max():.6f}]")
+                    if test_read.max() > 1.0:
+                        logger.info(f"  ✅ HDR data preserved (max value: {test_read.max():.2f})")
+                    else:
+                        logger.warning(f"  ⚠️ HDR data may be clipped (max value: {test_read.max():.2f})")
+                
+                return (filepath,)
+            else:
+                error_msg = f"Failed to save EXR file to {filepath}"
+                logger.error(f"HDR Export: {error_msg}")
+                raise RuntimeError(error_msg)
+                
+        except Exception as e:
+            error_msg = f"HDR Export failed: {str(e)}"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
+    
+    def _get_file_stats(self, filepath: str) -> dict:
+        """Get statistics about the saved file"""
+        try:
+            # File size
+            size_bytes = os.path.getsize(filepath)
+            size_mb = size_bytes / (1024 * 1024)
+            
+            # Image dimensions using OpenCV
+            img = cv2.imread(filepath, cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
+            if img is not None:
+                height, width = img.shape[:2]
+                channels = img.shape[2] if len(img.shape) > 2 else 1
+            else:
+                width = height = channels = 0
+            
+            return {
+                'size_mb': size_mb,
+                'width': width,
+                'height': height,
+                'channels': channels
+            }
+        except Exception:
+            return {
+                'size_mb': 0,
+                'width': 0,
+                'height': 0,
+                'channels': 0
+            }
+
+
 # Node class mappings for ComfyUI
 NODE_CLASS_MAPPINGS = {
     "LuminanceStackProcessor3Stops": LuminanceStackProcessor3Stops,
     "LuminanceStackProcessor5Stops": LuminanceStackProcessor5Stops,
+    "HDRExportNode": HDRExportNode
 }
 
-# Display names for nodes in ComfyUI interface
 NODE_DISPLAY_NAME_MAPPINGS = {
     "LuminanceStackProcessor3Stops": "Luminance Stack Processor (3 Stops)",
     "LuminanceStackProcessor5Stops": "Luminance Stack Processor (5 Stops)",
+    "HDRExportNode": "HDR Export to EXR"
 }
