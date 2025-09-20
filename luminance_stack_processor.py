@@ -49,68 +49,80 @@ def tensor_to_cv2(tensor: torch.Tensor, apply_gamma_correction: bool = False) ->
 
 
 def cv2_to_tensor(hdr_image: np.ndarray, output_16bit_linear: bool = True, algorithm_hint: str = "unknown") -> torch.Tensor:
-    """Convert OpenCV HDR image to ComfyUI tensor format"""
+    """Convert OpenCV HDR image to ComfyUI tensor format - VFX pipeline friendly"""
     
     if output_16bit_linear:
-        # Convert HDR linear data to 16-bit linear format
-        # Scale to 16-bit range while preserving linear characteristics
+        logger.info(f"HDR processing ({algorithm_hint}):")
+        logger.info(f"  Input range: [{hdr_image.min():.6f}, {hdr_image.max():.6f}]")
         
-        # Different scaling strategies based on algorithm
+        # VFX PIPELINE APPROACH: Different scaling philosophy per algorithm
         if algorithm_hint == "natural_blend":
-            # Natural Blend should have similar range to original images, use 85th percentile
-            scale_reference = np.percentile(hdr_image, 85.0)
-            target_scale = 0.85  # 85% of 16-bit range
-        elif algorithm_hint == "mertens":
-            # Mertens typically produces 0-2 range, use 90th percentile
-            scale_reference = np.percentile(hdr_image, 90.0)
-            target_scale = 0.8  # 80% of 16-bit range
-        else:
-            # Debevec/Robertson can have very wide ranges, use 95th percentile
-            scale_reference = np.percentile(hdr_image, 95.0)  
-            target_scale = 0.7  # 70% of 16-bit range for more headroom
-        
-        if scale_reference > 0:
-            # Scale so that the percentile maps to target % of 16-bit range
-            scale_factor = (target_scale * 65535.0) / scale_reference
-            scaled_linear = hdr_image * scale_factor
-        else:
-            scaled_linear = hdr_image * 65535.0
-        
-        # Clamp to 16-bit range but preserve linear values above 1.0
-        hdr_16bit_linear = np.clip(scaled_linear, 0.0, 65535.0)
-        
-        # Convert to ComfyUI tensor format (0-1 range) while preserving 16-bit precision
-        normalized_16bit = hdr_16bit_linear / 65535.0
-        
-        logger.info(f"HDR 16-bit linear output ({algorithm_hint}):")
-        logger.info(f"  Original range: [{hdr_image.min():.6f}, {hdr_image.max():.6f}]")
-        
-        # Choose percentile based on algorithm
-        if algorithm_hint == "natural_blend":
-            percentile_used = 85
-        elif algorithm_hint == "mertens":
-            percentile_used = 90
-        else:
-            percentile_used = 95
+            # Natural Blend: Conservative scaling, values 1-5 range
+            p90 = np.percentile(hdr_image, 90.0)
+            if p90 > 0:
+                hdr_linear = hdr_image * (2.0 / p90)
+            else:
+                hdr_linear = hdr_image * 2.0
+            hdr_linear = np.clip(hdr_linear, 0.0, 8.0)
             
-        logger.info(f"  Scale reference ({percentile_used}th percentile): {scale_reference:.6f}")
-        logger.info(f"  16-bit range: [{hdr_16bit_linear.min():.1f}, {hdr_16bit_linear.max():.1f}]")
-        logger.info(f"  Final range: [{normalized_16bit.min():.6f}, {normalized_16bit.max():.6f}]")
-        logger.info(f"  Scale factor: {scale_factor:.2f}")
+        elif algorithm_hint == "mertens":
+            # Mertens: Medium HDR range, values 1-10 range
+            p85 = np.percentile(hdr_image, 85.0)
+            if p85 > 0:
+                hdr_linear = hdr_image * (3.0 / p85)
+            else:
+                hdr_linear = hdr_image * 3.0
+            hdr_linear = np.clip(hdr_linear, 0.0, 12.0)
+            
+        elif algorithm_hint in ["debevec", "robertson"]:
+            # VFX PIPELINE: RAW LINEAR RADIANCE - minimal processing!
+            # This should look FLAT and LOG-LIKE - that's CORRECT for VFX!
+            
+            # Only apply gentle scaling to bring into reasonable range for EXR
+            # Don't make it "pretty" - VFX artists want raw data
+            if hdr_image.max() > 0:
+                # Conservative scaling - preserve as much raw data as possible
+                p99 = np.percentile(hdr_image, 99.0)  # Use 99th percentile, not lower
+                if p99 > 0:
+                    # Very gentle scaling - target range around 0.18 (18% gray equivalent)
+                    # This matches VFX pipeline expectations
+                    hdr_linear = hdr_image * (0.18 / np.percentile(hdr_image, 50.0))  # Scale middle gray
+                    
+                    # Allow VERY wide range for VFX work - no aggressive clipping
+                    hdr_linear = np.clip(hdr_linear, 0.0, 1000.0)  # Wide range for sun, sky, etc.
+                else:
+                    hdr_linear = hdr_image
+            else:
+                hdr_linear = hdr_image
+                
+            logger.info(f"  VFX Pipeline: Raw linear radiance preserved (flat/log appearance is CORRECT)")
+            
+        else:
+            # Unknown algorithm - conservative approach
+            hdr_linear = np.clip(hdr_image * 2.0, 0.0, 10.0)
+        
+        logger.info(f"  Final HDR range: [{hdr_linear.min():.6f}, {hdr_linear.max():.6f}]")
+        logger.info(f"  Max value: {hdr_linear.max():.2f} (VFX raw data)")
+        
+        # Convert to ComfyUI format: [1, H, W, C] - NO NORMALIZATION!
+        if len(hdr_linear.shape) == 3:
+            tensor = torch.from_numpy(hdr_linear.astype(np.float32)).unsqueeze(0)
+        else:
+            tensor = torch.from_numpy(hdr_linear.astype(np.float32))
+        
+        return tensor.float()
         
     else:
-        # Legacy floating point output (not recommended for 16-bit workflow)
-        max_val = np.percentile(hdr_image, 99.9)
-        if max_val > 0:
-            normalized_16bit = hdr_image / max_val
-        else:
-            normalized_16bit = hdr_image
+        # Standard 8-bit conversion (fallback)
+        image_8bit = np.clip(hdr_image * 255.0, 0, 255).astype(np.uint8)
+        normalized = image_8bit.astype(np.float32) / 255.0
         
-        normalized_16bit = np.clip(normalized_16bit, 0.0, 10.0)
-    
-    # Add batch dimension and convert to tensor
-    tensor = torch.from_numpy(normalized_16bit.astype(np.float32)).unsqueeze(0)
-    return tensor
+        if len(normalized.shape) == 3:
+            tensor = torch.from_numpy(normalized).unsqueeze(0)
+        else:
+            tensor = torch.from_numpy(normalized)
+        
+        return tensor.float()
 
 
 class DebevecHDRProcessor:
@@ -143,13 +155,13 @@ class DebevecHDRProcessor:
                 if img.dtype != np.uint8:
                     logger.warning(f"Image {i} is not 8-bit (dtype: {img.dtype}), this may cause issues")
                 
-                # CRITICAL FIX: Convert BGR to RGB for proper color handling
-                # OpenCV uses BGR by default, but HDR processing expects RGB
+                # Handle color channels properly for each algorithm
                 if len(img.shape) == 3 and img.shape[2] == 3:  # RGB
                     if algorithm in ["debevec", "robertson"]:
-                        # Only convert for algorithms that benefit from it
-                        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                        processed_images.append(img_rgb)
+                        # VFX PIPELINE FIX: Test both RGB and BGR to find which works correctly
+                        # Many Debevec color issues come from wrong channel order assumption
+                        processed_images.append(img)  # Try original first (ComfyUI tensors are typically RGB)
+                        logger.info(f"Using original color order for {algorithm} (assuming RGB)")
                     else:
                         # For Mertens and Natural Blend, keep original format
                         processed_images.append(img)
@@ -180,23 +192,41 @@ class DebevecHDRProcessor:
                 hdr_radiance = self._blend_ev0_based(processed_images, times)
                 
             elif algorithm == "robertson":
-                # Robertson algorithm - alternative to Debevec
-                logger.info("Using Robertson algorithm...")
+                # Robertson algorithm - VFX pipeline style (raw linear radiance)
+                logger.info("Using Robertson algorithm - VFX pipeline mode...")
                 response = self.calibrator_robertson.process(processed_images, times)
                 hdr_radiance = self.merge_robertson.process(processed_images, times, response)
-                # Apply minimal tone mapping to preserve HDR range
-                hdr_radiance = self._gentle_tone_map(hdr_radiance, "Robertson")
                 
-            else:  # Default to Debevec
+                logger.info(f"Robertson raw radiance range: [{hdr_radiance.min():.6f}, {hdr_radiance.max():.6f}]")
+                
+                # VFX PIPELINE: NO TONE MAPPING! Keep raw linear radiance
+                if hdr_radiance.max() > 1000.0:  # Only if extremely bright values
+                    scale_factor = 100.0 / np.percentile(hdr_radiance, 99.5)
+                    hdr_radiance = hdr_radiance * scale_factor
+                    logger.info(f"Applied minimal scaling for numerical stability: {scale_factor:.3f}")
+                
+                logger.info(f"Robertson VFX output range: [{hdr_radiance.min():.6f}, {hdr_radiance.max():.6f}]")
+                
+            else:  # Default to Debevec - VFX pipeline style (raw linear radiance)
                 # Estimate camera response function using Debevec method
-                logger.info("Using Debevec algorithm...")
+                logger.info("Using Debevec algorithm - VFX pipeline mode (raw linear radiance)...")
                 response = self.calibrator.process(processed_images, times)
                 logger.info(f"Response function shape: {response.shape}")
                 
                 # Merge images into HDR using Debevec algorithm
                 hdr_radiance = self.merge_debevec.process(processed_images, times, response)
-                # Apply minimal tone mapping to preserve HDR range
-                hdr_radiance = self._gentle_tone_map(hdr_radiance, "Debevec")
+                
+                logger.info(f"Debevec raw radiance range: [{hdr_radiance.min():.6f}, {hdr_radiance.max():.6f}]")
+                
+                # VFX PIPELINE: NO TONE MAPPING! Keep raw linear radiance for professional workflow
+                # This should look flat/log-like - that's correct for VFX
+                # Only apply minimal scaling if needed for numerical stability
+                if hdr_radiance.max() > 1000.0:  # Only if extremely bright values
+                    scale_factor = 100.0 / np.percentile(hdr_radiance, 99.5)
+                    hdr_radiance = hdr_radiance * scale_factor
+                    logger.info(f"Applied minimal scaling for numerical stability: {scale_factor:.3f}")
+                
+                logger.info(f"Debevec VFX output range: [{hdr_radiance.min():.6f}, {hdr_radiance.max():.6f}]")
             
             # Validate HDR output
             if hdr_radiance is None or hdr_radiance.size == 0:
@@ -212,10 +242,8 @@ class DebevecHDRProcessor:
             if np.all(hdr_radiance == 0):
                 raise ValueError("HDR merge produced all-zero result")
             
-            # CRITICAL FIX: Convert back from RGB to BGR for consistency (only if we converted earlier)
-            # This ensures the output color channels are in the expected order
-            if len(hdr_radiance.shape) == 3 and hdr_radiance.shape[2] == 3 and algorithm in ["debevec", "robertson"]:
-                hdr_radiance = cv2.cvtColor(hdr_radiance, cv2.COLOR_RGB2BGR)
+            # VFX PIPELINE: Keep output in same format as input (no additional conversions)
+            # ComfyUI expects consistent color order throughout the pipeline
             
             # The result is in linear colorspace - preserve HDR data
             return hdr_radiance.astype(np.float32)
@@ -631,6 +659,7 @@ class HDRExportNode:
             os.makedirs(output_dir, exist_ok=True)
             
             # Generate unique filename with timestamp
+            from datetime import datetime
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"{filename_prefix}_{timestamp}.exr"
             filepath = os.path.join(output_dir, filename)

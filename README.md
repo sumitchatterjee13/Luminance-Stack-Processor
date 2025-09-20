@@ -78,6 +78,16 @@ Professional HDR (High Dynamic Range) processing nodes for ComfyUI using the **D
 2. **🔥 HDR Export**: **ALWAYS** connect to "HDR Export to EXR" node  
 3. **❌ Never use ComfyUI's built-in save nodes** for HDR - they normalize to 0-1!
 
+### ⚠️ **Important Notes for VFX Artists:**
+
+**Debevec/Robertson algorithms produce FLAT, LOG-LIKE images** - this is CORRECT! The flat appearance means:
+- ✅ Raw linear radiance data preserved
+- ✅ Wide dynamic range maintained  
+- ✅ Ready for professional color grading
+- ✅ No "pretty" tone mapping destroying data
+
+If you want a "prettier" result for display, use **Mertens** or **Natural Blend** instead.
+
 ### Luminance Stack Processor (3 Stops)
 
 Perfect for standard HDR bracketing with 3 exposures:
@@ -156,16 +166,18 @@ The nodes implement **multiple HDR algorithms** with **Natural Blend** as the de
 - **Enhanced contrast**: Produces more dynamic results than Natural Blend
 - **Fastest processing**: No camera response function estimation required
 
-#### **Debevec Algorithm (Classic HDR)**
-- **HDR Range**: 1-100+ (maximum HDR values for extreme dynamic range)
+#### **Debevec Algorithm (VFX Pipeline)**
+- **HDR Range**: Raw linear radiance (0.18 middle gray scaling - VFX standard)
+- **Flat/Log Appearance**: Looks flat and desaturated - **CORRECT** for professional VFX
 - **Industry standard**: Original HDR reconstruction method from 1997
-- **True scene radiance**: Recovers actual physical light values
-- **Maximum dynamic range**: Best for scenes with extreme lighting (sun, reflections, etc.)
+- **No tone mapping**: Raw scene radiance ready for color grading and VFX pipelines  
+- **Professional workflow**: Matches industry expectations for HDR plates
 
-#### **Robertson Algorithm**
-- **HDR Range**: 1-80+ (high HDR values with alternative processing)
-- **Alternative to Debevec**: Different camera response function estimation
-- **Robust processing**: Often produces cleaner results than Debevec
+#### **Robertson Algorithm**  
+- **HDR Range**: Raw linear radiance (0.18 middle gray scaling - VFX standard)
+- **Flat/Log Appearance**: Looks flat and desaturated - **CORRECT** for professional VFX
+- **Alternative to Debevec**: Different camera response function estimation method
+- **Professional workflow**: Raw scene radiance ready for color grading and VFX pipelines
 
 ## 📸 Best Practices
 
@@ -182,10 +194,18 @@ The nodes implement **multiple HDR algorithms** with **Natural Blend** as the de
 - Adjust `exposure_step` parameter if using different increments
 
 ### Algorithm Selection Guide:
-- **Use Natural Blend (Default)**: When you want to keep the exact look of your EV0 image with enhanced dynamic range
-- **Use Mertens**: For natural HDR look similar to Adobe Lightroom (may add some contrast)
-- **Use Debevec**: For scientific/research work requiring precise scene radiance values  
-- **Use Robertson**: Alternative to Debevec with different mathematical approach
+
+#### 🎬 **For VFX/Post-Production:**
+- **🔬 Debevec** (Recommended): Raw linear radiance, flat/log appearance - **CORRECT** for VFX plates
+- **⚙️ Robertson**: Alternative raw radiance method, sometimes cleaner results
+
+#### 🎨 **For Photography/Display:**
+- **🌟 Natural Blend** (Recommended): Natural-looking results maintaining original EV0 appearance  
+- **💫 Mertens**: Adobe Lightroom-style HDR with enhanced contrast
+
+#### 💡 **Important:** 
+- **VFX Algorithms** (Debevec/Robertson): Flat, desaturated appearance - **this is professional standard!**
+- **Display Algorithms** (Natural Blend/Mertens): Enhanced, natural-looking, ready for viewing
 
 ## ⚙️ Technical Details
 

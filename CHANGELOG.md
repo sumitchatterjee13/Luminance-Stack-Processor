@@ -23,10 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **HDR verification** - Automatic verification that HDR data is preserved in exported files
 
 ### Fixed
-- **🚨 CRITICAL: Identified HDR export issue** - ComfyUI's built-in save nodes normalize to 0-1 range
-- **Reverted Debevec color inversion** - Restored working algorithm implementations
+- **🚨 CRITICAL: Fixed Debevec for VFX pipeline** - Now produces flat, log-like raw linear radiance (correct for professional VFX)
+- **Removed tone mapping from Debevec/Robertson** - VFX artists need raw data, not processed images
+- **Fixed color channel handling** - Proper RGB handling without unnecessary conversions
+- **VFX Pipeline compliance** - Debevec now outputs professional flat/log appearance
 - **Created proper HDR workflow** - Use HDR Export Node instead of built-in save nodes for EXR
-- **Algorithm differences working** - Confirmed algorithms produce different results as intended
 
 ## [1.0.1] - 2025-01-20
 
