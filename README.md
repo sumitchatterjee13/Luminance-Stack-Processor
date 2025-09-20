@@ -99,7 +99,7 @@ For extended dynamic range with 5 exposures:
 
 ## 🔬 How It Works
 
-The nodes implement **multiple HDR algorithms** with **EV0-Based Blending** as the default (preserves natural appearance):
+The nodes implement **multiple HDR algorithms** with **Natural Blend** as the default (preserves natural appearance):
 
 1. **Analyzes Multiple Exposures**: Takes differently exposed 8-bit images of the same scene
 2. **Estimates Camera Response Function**: Determines how the camera sensor responds to light
@@ -109,7 +109,7 @@ The nodes implement **multiple HDR algorithms** with **EV0-Based Blending** as t
 
 ### 🎯 **HDR Algorithm Options:**
 
-#### **EV0-Based Blending (Default - Recommended)**  
+#### **Natural Blend (Default - Recommended)**  
 - **Perfect for natural look**: Uses EV0 as base appearance, adds dynamic range from other exposures
 - **Zero contrast change**: Output looks exactly like EV0 with enhanced highlight/shadow detail
 - **Seamless blending**: Uses luminance masks for smooth transitions
@@ -146,14 +146,14 @@ The nodes implement **multiple HDR algorithms** with **EV0-Based Blending** as t
 - Adjust `exposure_step` parameter if using different increments
 
 ### Algorithm Selection Guide:
-- **Use EV0-Based (Default)**: When you want to keep the exact look of your EV0 image with enhanced dynamic range
+- **Use Natural Blend (Default)**: When you want to keep the exact look of your EV0 image with enhanced dynamic range
 - **Use Mertens**: For natural HDR look similar to Adobe Lightroom (may add some contrast)
 - **Use Debevec**: For scientific/research work requiring precise scene radiance values  
 - **Use Robertson**: Alternative to Debevec with different mathematical approach
 
 ## ⚙️ Technical Details
 
-- **Algorithms**: EV0-Based Blending (default), Mertens Exposure Fusion, Debevec, Robertson
+- **Algorithms**: Natural Blend (default), Mertens Exposure Fusion, Debevec, Robertson
 - **Input Format**: 8-bit ComfyUI IMAGE tensors (0-1 float range from 8-bit sources)
 - **Output Format**: 16-bit linear colorspace images for extended dynamic range
 - **Processing**: OpenCV's `createCalibrateDebevec()` and `createMergeDebevec()`
@@ -169,13 +169,13 @@ The nodes implement **multiple HDR algorithms** with **EV0-Based Blending** as t
    - Restart ComfyUI completely
 
 2. **Color inversion or wrong colors**:
-   - **EV0-Based algorithm** (default) - uses original EV0 colors, no issues expected
+   - **Natural Blend algorithm** (default) - uses original EV0 colors, no issues expected
    - **Mertens algorithm** - produces natural colors, no issues expected
    - **Debevec algorithm** - now includes automatic Reinhard tone mapping for proper colors
    - **Robertson algorithm** - also includes tone mapping for natural appearance
 
 3. **Image too bright or too dark**:
-   - **EV0-Based** (default) - keeps exact brightness of your EV0 image
+   - **Natural Blend** (default) - keeps exact brightness of your EV0 image
    - **All other algorithms** produce proper brightness levels automatically  
    - **Mertens** - natural brightness similar to Adobe Lightroom
    - **Debevec/Robertson** - include automatic Reinhard tone mapping for proper brightness
@@ -184,8 +184,8 @@ The nodes implement **multiple HDR algorithms** with **EV0-Based Blending** as t
    - Ensure input images are properly exposed (not all over/under)
    - Check that images are aligned (use tripod)  
    - Verify EV differences match your capture method
-   - **For EV0-Based**: Make sure the EV0 image is your desired base appearance
-   - Try different algorithms: EV0-Based preserves natural look, Mertens for more artistic results
+   - **For Natural Blend**: Make sure the EV0 image is your desired base appearance
+   - Try different algorithms: Natural Blend preserves natural look, Mertens for more artistic results
 
 5. **Memory issues**:
    - Process smaller images first

@@ -49,8 +49,8 @@ def cv2_to_tensor(hdr_image: np.ndarray, output_16bit_linear: bool = True, algor
         # Scale to 16-bit range while preserving linear characteristics
         
         # Different scaling strategies based on algorithm
-        if algorithm_hint == "ev0_base":
-            # EV0-based should have similar range to original images, use 85th percentile
+        if algorithm_hint == "natural_blend":
+            # Natural Blend should have similar range to original images, use 85th percentile
             scale_reference = np.percentile(hdr_image, 85.0)
             target_scale = 0.85  # 85% of 16-bit range
         elif algorithm_hint == "mertens":
@@ -79,7 +79,7 @@ def cv2_to_tensor(hdr_image: np.ndarray, output_16bit_linear: bool = True, algor
         logger.info(f"  Original range: [{hdr_image.min():.6f}, {hdr_image.max():.6f}]")
         
         # Choose percentile based on algorithm
-        if algorithm_hint == "ev0_base":
+        if algorithm_hint == "natural_blend":
             percentile_used = 85
         elif algorithm_hint == "mertens":
             percentile_used = 90
@@ -162,9 +162,9 @@ class DebevecHDRProcessor:
                 if hdr_radiance.max() <= 1.0:
                     hdr_radiance = hdr_radiance * 2.0  # Boost for better dynamic range
                     
-            elif algorithm == "ev0_base":
-                # EV0-based exposure blending - maintains EV0 appearance with enhanced dynamic range
-                logger.info("Using EV0-based exposure blending...")
+            elif algorithm == "natural_blend":
+                # Natural Blend - maintains EV0 appearance with enhanced dynamic range
+                logger.info("Using Natural Blend exposure blending...")
                 hdr_radiance = self._blend_ev0_based(processed_images, times)
                 
             elif algorithm == "robertson":
@@ -284,7 +284,7 @@ class DebevecHDRProcessor:
         Returns:
             Enhanced image that looks like EV0 but with extended dynamic range
         """
-        logger.info("EV0-based blending: Preserving EV0 appearance with enhanced dynamic range")
+        logger.info("Natural Blend: Preserving EV0 appearance with enhanced dynamic range")
         
         # Find the EV0 image (middle exposure - should be the normal exposure)
         ev0_idx = len(images) // 2  # Middle image is typically EV0
@@ -330,7 +330,7 @@ class DebevecHDRProcessor:
         # Convert back to 0-255 range for consistency with other algorithms
         result_8bit = np.clip(result * 255.0, 0, 255).astype(np.uint8)
         
-        logger.info("EV0-based blending completed - appearance preserved with enhanced dynamic range")
+        logger.info("Natural Blend completed - appearance preserved with enhanced dynamic range")
         
         return result_8bit.astype(np.float32) / 255.0  # Return as float32 in 0-1 range
     
@@ -385,8 +385,8 @@ class LuminanceStackProcessor3Stops:
                     "step": 0.1,
                     "display": "number"
                 }),
-                "hdr_algorithm": (["ev0_base", "mertens", "debevec", "robertson"], {
-                    "default": "ev0_base"
+                "hdr_algorithm": (["natural_blend", "mertens", "debevec", "robertson"], {
+                    "default": "natural_blend"
                 }),
             }
         }
@@ -399,7 +399,7 @@ class LuminanceStackProcessor3Stops:
     def __init__(self):
         self.processor = DebevecHDRProcessor()
     
-    def process_3_stop_hdr(self, ev_plus_2, ev_0, ev_minus_2, exposure_step=2.0, hdr_algorithm="ev0_base"):
+    def process_3_stop_hdr(self, ev_plus_2, ev_0, ev_minus_2, exposure_step=2.0, hdr_algorithm="natural_blend"):
         """
         Process 3-stop HDR merge
         
@@ -469,8 +469,8 @@ class LuminanceStackProcessor5Stops:
                     "step": 0.1,
                     "display": "number"
                 }),
-                "hdr_algorithm": (["mertens", "debevec", "robertson"], {
-                    "default": "mertens"
+                "hdr_algorithm": (["natural_blend", "mertens", "debevec", "robertson"], {
+                    "default": "natural_blend"
                 }),
             }
         }
@@ -483,7 +483,7 @@ class LuminanceStackProcessor5Stops:
     def __init__(self):
         self.processor = DebevecHDRProcessor()
     
-    def process_5_stop_hdr(self, ev_plus_4, ev_plus_2, ev_0, ev_minus_2, ev_minus_4, exposure_step=2.0, hdr_algorithm="ev0_base"):
+    def process_5_stop_hdr(self, ev_plus_4, ev_plus_2, ev_0, ev_minus_2, ev_minus_4, exposure_step=2.0, hdr_algorithm="natural_blend"):
         """
         Process 5-stop HDR merge
         
