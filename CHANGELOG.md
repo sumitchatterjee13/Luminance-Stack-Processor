@@ -11,10 +11,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Nothing yet
 
 ### Changed
-- Nothing yet
+- **Optimized for 8-bit input workflow** - Removed unnecessary 8-bit conversion since inputs are already 8-bit
+- **Enhanced 16-bit linear output** - Improved scaling algorithm for better 16-bit range utilization
 
 ### Fixed
 - Nothing yet
+
+## [1.0.1] - 2025-01-20
+
+### Fixed
+- **CRITICAL: Fixed HDR processing for proper linear colorspace output**
+- **Fixed 8-bit input requirement for OpenCV HDR functions** (createMergeDebevec expects 8-bit input)
+- **Added proper gamma correction preprocessing** (sRGB to linear conversion before HDR processing)
+- **Improved HDR data preservation** - no longer clips values to 0-1 range, preserves HDR information
+- **Enhanced error handling and logging** for better debugging of HDR processing issues
+- **Fixed color artifacts** in HDR output by proper colorspace handling
+- **Added linear colorspace validation** to ensure proper scene radiance recovery
+
+### Technical Improvements
+- Added proper sRGB to linear gamma correction before HDR processing
+- Implemented 99.9th percentile normalization to handle extreme HDR values
+- Enhanced logging with detailed HDR processing information
+- Added validation for image format and HDR output quality
+- Improved fallback handling with proper linear space conversion
 
 ## [1.0.0] - 2025-01-20
 

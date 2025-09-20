@@ -3,7 +3,7 @@ Luminance Stack Processor - Professional ComfyUI Custom Nodes
 Implements HDR processing using the Debevec Algorithm for multiple exposure fusion
 
 Author: Sumit Chatterjee
-Version: 1.0.0
+Version: 1.0.1
 Semantic Versioning: MAJOR.MINOR.PATCH
 """
 
@@ -19,31 +19,71 @@ logger = logging.getLogger(__name__)
 
 
 def tensor_to_cv2(tensor: torch.Tensor) -> np.ndarray:
-    """Convert ComfyUI tensor to OpenCV format"""
+    """Convert ComfyUI tensor to OpenCV format for HDR processing"""
     # ComfyUI tensors are typically [B, H, W, C] in 0-1 range
     if len(tensor.shape) == 4:
         tensor = tensor.squeeze(0)  # Remove batch dimension
     
-    # Convert to numpy and scale to 0-255
+    # Convert to numpy and scale to 8-bit (input images are already 8-bit)
     image = tensor.cpu().numpy()
-    if image.dtype == np.float32 or image.dtype == np.float64:
-        image = np.clip(image * 255.0, 0, 255).astype(np.uint8)
     
-    return image
+    # Apply gamma correction (sRGB to linear) before HDR processing
+    # This is crucial for proper camera response function recovery
+    image_linear = np.where(image <= 0.04045, 
+                           image / 12.92,
+                           np.power((image + 0.055) / 1.055, 2.4))
+    
+    # Convert back to 8-bit for OpenCV HDR functions (since inputs are 8-bit)
+    image_8bit = np.clip(image_linear * 255.0, 0, 255).astype(np.uint8)
+    
+    logger.info(f"Converted tensor to CV2: shape={image_8bit.shape}, dtype={image_8bit.dtype}, range=[{image_8bit.min()}, {image_8bit.max()}]")
+    
+    return image_8bit
 
 
-def cv2_to_tensor(image: np.ndarray) -> torch.Tensor:
-    """Convert OpenCV image to ComfyUI tensor format"""
-    # Ensure image is float32 in 0-1 range
-    if image.dtype == np.uint8:
-        image = image.astype(np.float32) / 255.0
-    elif image.dtype == np.uint16:
-        image = image.astype(np.float32) / 65535.0
-    elif image.dtype == np.float32:
-        image = np.clip(image, 0.0, 1.0)
+def cv2_to_tensor(hdr_image: np.ndarray, output_16bit_linear: bool = True) -> torch.Tensor:
+    """Convert OpenCV HDR image to ComfyUI tensor format"""
+    
+    if output_16bit_linear:
+        # Convert HDR linear data to 16-bit linear format
+        # Scale to 16-bit range while preserving linear characteristics
+        
+        # Find a reasonable scaling factor based on HDR content
+        # Use 95th percentile to avoid extreme outliers affecting scaling
+        scale_reference = np.percentile(hdr_image, 95.0)
+        
+        if scale_reference > 0:
+            # Scale so that the 95th percentile maps to ~80% of 16-bit range
+            # This preserves highlights while utilizing most of the 16-bit range
+            scale_factor = (0.8 * 65535.0) / scale_reference
+            scaled_linear = hdr_image * scale_factor
+        else:
+            scaled_linear = hdr_image * 65535.0
+        
+        # Clamp to 16-bit range but preserve linear values above 1.0
+        hdr_16bit_linear = np.clip(scaled_linear, 0.0, 65535.0)
+        
+        # Convert to ComfyUI tensor format (0-1 range) while preserving 16-bit precision
+        normalized_16bit = hdr_16bit_linear / 65535.0
+        
+        logger.info(f"HDR 16-bit linear output:")
+        logger.info(f"  Original range: [{hdr_image.min():.6f}, {hdr_image.max():.6f}]")
+        logger.info(f"  16-bit range: [{hdr_16bit_linear.min():.1f}, {hdr_16bit_linear.max():.1f}]")
+        logger.info(f"  Final range: [{normalized_16bit.min():.6f}, {normalized_16bit.max():.6f}]")
+        logger.info(f"  Scale factor: {scale_factor:.2f}")
+        
+    else:
+        # Legacy floating point output (not recommended for 16-bit workflow)
+        max_val = np.percentile(hdr_image, 99.9)
+        if max_val > 0:
+            normalized_16bit = hdr_image / max_val
+        else:
+            normalized_16bit = hdr_image
+        
+        normalized_16bit = np.clip(normalized_16bit, 0.0, 10.0)
     
     # Add batch dimension and convert to tensor
-    tensor = torch.from_numpy(image).unsqueeze(0)
+    tensor = torch.from_numpy(normalized_16bit.astype(np.float32)).unsqueeze(0)
     return tensor
 
 
@@ -56,55 +96,79 @@ class DebevecHDRProcessor:
         
     def process_hdr(self, images: List[np.ndarray], exposure_times: List[float]) -> np.ndarray:
         """
-        Process multiple exposure images using Debevec algorithm
+        Process multiple exposure images using Debevec algorithm with proper linear colorspace handling
         
         Args:
-            images: List of images (OpenCV format)
+            images: List of 8-bit images (OpenCV format) - CRITICAL: Must be 8-bit for OpenCV HDR
             exposure_times: List of exposure times in seconds
             
         Returns:
-            HDR merged image as 16-bit
+            HDR merged image in linear colorspace (float32)
         """
         try:
-            # Ensure images are in uint8 format for calibration
+            # Validate input format - OpenCV HDR functions require 8-bit input
             processed_images = []
-            for img in images:
+            for i, img in enumerate(images):
                 if img.dtype != np.uint8:
-                    if img.dtype == np.float32:
-                        img = np.clip(img * 255.0, 0, 255).astype(np.uint8)
-                    else:
-                        img = img.astype(np.uint8)
-                processed_images.append(img)
+                    logger.warning(f"Image {i} is not 8-bit (dtype: {img.dtype}), this may cause issues")
+                
+                # Ensure proper format
+                if len(img.shape) == 3 and img.shape[2] == 3:  # RGB
+                    processed_images.append(img)
+                else:
+                    logger.error(f"Image {i} has invalid shape: {img.shape}")
+                    raise ValueError(f"Image must be 3-channel RGB, got shape: {img.shape}")
             
             # Convert exposure times to numpy array
             times = np.array(exposure_times, dtype=np.float32)
             
             logger.info(f"Processing {len(processed_images)} images with exposure times: {times}")
+            logger.info(f"Image formats: {[img.shape for img in processed_images]}")
+            logger.info(f"Image dtypes: {[img.dtype for img in processed_images]}")
             
-            # Estimate camera response function
+            # Estimate camera response function using Debevec method
+            logger.info("Estimating camera response function...")
             response = self.calibrator.process(processed_images, times)
+            logger.info(f"Response function shape: {response.shape}")
             
-            # Merge images into HDR
-            hdr = self.merge_debevec.process(processed_images, times, response)
+            # Merge images into HDR using Debevec algorithm
+            logger.info("Merging images using Debevec algorithm...")
+            hdr_radiance = self.merge_debevec.process(processed_images, times, response)
             
-            # Convert HDR to 16-bit for better dynamic range preservation
-            # Apply tone mapping to fit into 16-bit range
-            hdr_normalized = cv2.normalize(hdr, None, 0, 65535, cv2.NORM_MINMAX)
-            hdr_16bit = hdr_normalized.astype(np.uint16)
+            # Validate HDR output
+            if hdr_radiance is None or hdr_radiance.size == 0:
+                raise ValueError("HDR merge produced empty result")
             
-            logger.info(f"HDR processing completed. Output shape: {hdr_16bit.shape}")
+            logger.info(f"HDR merge completed:")
+            logger.info(f"  Output shape: {hdr_radiance.shape}")
+            logger.info(f"  Output dtype: {hdr_radiance.dtype}")
+            logger.info(f"  Value range: [{hdr_radiance.min():.6f}, {hdr_radiance.max():.6f}]")
+            logger.info(f"  Mean value: {hdr_radiance.mean():.6f}")
             
-            return hdr_16bit
+            # Check for valid HDR data
+            if np.all(hdr_radiance == 0):
+                raise ValueError("HDR merge produced all-zero result")
+            
+            # The result is already in linear colorspace (scene radiance values)
+            # Don't apply tone mapping - preserve the HDR data as-is
+            return hdr_radiance.astype(np.float32)
             
         except Exception as e:
             logger.error(f"HDR processing error: {str(e)}")
-            # Fallback: return the middle exposure image
+            logger.error(f"Image count: {len(images)}")
+            logger.error(f"Image shapes: {[img.shape if img is not None else 'None' for img in images]}")
+            logger.error(f"Exposure times: {exposure_times}")
+            
+            # Fallback: return the middle exposure image in linear space
             if images:
                 middle_idx = len(images) // 2
-                fallback = images[middle_idx]
-                if fallback.dtype != np.uint16:
-                    fallback = (fallback.astype(np.float32) * 257).astype(np.uint16)
-                return fallback
+                fallback = images[middle_idx].astype(np.float32) / 255.0
+                # Convert back to linear space (reverse gamma correction)
+                fallback_linear = np.where(fallback <= 0.04045, 
+                                         fallback / 12.92,
+                                         np.power((fallback + 0.055) / 1.055, 2.4))
+                logger.info(f"Using fallback image (index {middle_idx})")
+                return fallback_linear.astype(np.float32)
             raise e
 
 
@@ -173,11 +237,11 @@ class LuminanceStackProcessor3Stops:
             
             logger.info(f"3-Stop HDR: Processing with times {times}")
             
-            # Process HDR
+            # Process HDR using improved Debevec algorithm
             hdr_result = self.processor.process_hdr(images, times)
             
-            # Convert back to tensor
-            output_tensor = cv2_to_tensor(hdr_result)
+            # Convert back to tensor - output 16-bit linear data
+            output_tensor = cv2_to_tensor(hdr_result, output_16bit_linear=True)
             
             return (output_tensor,)
             
@@ -259,11 +323,11 @@ class LuminanceStackProcessor5Stops:
             
             logger.info(f"5-Stop HDR: Processing with times {times}")
             
-            # Process HDR
+            # Process HDR using improved Debevec algorithm
             hdr_result = self.processor.process_hdr(images, times)
             
-            # Convert back to tensor
-            output_tensor = cv2_to_tensor(hdr_result)
+            # Convert back to tensor - output 16-bit linear data  
+            output_tensor = cv2_to_tensor(hdr_result, output_16bit_linear=True)
             
             return (output_tensor,)
             

@@ -1,6 +1,6 @@
 # Luminance Stack Processor - ComfyUI Custom Nodes
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/sumitchatterjee13/Luminance-Stack-Processor)
+[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](https://github.com/sumitchatterjee13/Luminance-Stack-Processor)
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/sumitchatterjee13/Luminance-Stack-Processor/blob/main/LICENSE)
 [![ComfyUI](https://img.shields.io/badge/ComfyUI-compatible-orange.svg)](https://github.com/comfyanonymous/ComfyUI)
@@ -8,7 +8,7 @@
 
 Professional HDR (High Dynamic Range) processing nodes for ComfyUI using the **Debevec Algorithm** for merging multiple exposure images into a single high dynamic range image.
 
-**Version: 1.0.0** | **Release Date: 2025-01-20**
+**Version: 1.0.1** | **Release Date: 2025-01-20**
 
 ## 🎯 Features
 
@@ -16,7 +16,7 @@ Professional HDR (High Dynamic Range) processing nodes for ComfyUI using the **D
 - **Two Processing Modes**:
   - **3-Stop Processor**: Merges EV+2, EV+0, EV-2 exposures
   - **5-Stop Processor**: Merges EV+4, EV+2, EV+0, EV-2, EV-4 exposures
-- **16-bit Output**: Preserves maximum dynamic range in the final image
+- **16-bit Linear Output**: Outputs 16-bit linear colorspace images with maximum dynamic range preservation
 - **Automatic Camera Response Function**: Estimates and applies camera response curves
 - **Fallback Safety**: Gracefully handles errors with fallback to middle exposure
 - **ComfyUI Integration**: Seamless integration with ComfyUI workflows
@@ -78,7 +78,7 @@ Perfect for standard HDR bracketing with 3 exposures:
 - `exposure_step`: (Optional) EV step size (default: 2.0)
 
 **Output:**
-- `hdr_image`: Merged 16-bit HDR image
+- `hdr_image`: Merged 16-bit linear HDR image
 
 ### Luminance Stack Processor (5 Stops)
 
@@ -93,17 +93,17 @@ For extended dynamic range with 5 exposures:
 - `exposure_step`: (Optional) EV step size (default: 2.0)
 
 **Output:**
-- `hdr_image`: Merged 16-bit HDR image
+- `hdr_image`: Merged 16-bit linear HDR image
 
 ## 🔬 How It Works
 
 The nodes implement the **Debevec Algorithm** (Paul E. Debevec, Jitendra Malik, 1997) which:
 
-1. **Analyzes Multiple Exposures**: Takes differently exposed images of the same scene
+1. **Analyzes Multiple Exposures**: Takes differently exposed 8-bit images of the same scene
 2. **Estimates Camera Response Function**: Determines how the camera sensor responds to light
 3. **Recovers Scene Radiance**: Calculates the actual light values in the scene
 4. **Merges to HDR**: Combines all exposures into a single high dynamic range image
-5. **Tone Maps for Output**: Converts to 16-bit format for maximum compatibility
+5. **Linear 16-bit Output**: Outputs 16-bit linear colorspace data preserving full HDR range
 
 ## 📸 Best Practices
 
@@ -122,8 +122,8 @@ The nodes implement the **Debevec Algorithm** (Paul E. Debevec, Jitendra Malik, 
 ## ⚙️ Technical Details
 
 - **Algorithm**: Debevec & Malik HDR reconstruction
-- **Input Format**: ComfyUI IMAGE tensors (0-1 float range)
-- **Output Format**: 16-bit images for extended dynamic range
+- **Input Format**: 8-bit ComfyUI IMAGE tensors (0-1 float range from 8-bit sources)
+- **Output Format**: 16-bit linear colorspace images for extended dynamic range
 - **Processing**: OpenCV's `createCalibrateDebevec()` and `createMergeDebevec()`
 - **Memory**: Efficient processing with automatic cleanup
 - **Error Handling**: Graceful fallbacks with detailed logging
@@ -233,4 +233,4 @@ We welcome contributions! Please:
 
 ---
 
-**Happy HDR Processing!** 📸✨ | **Version 1.0.0**
+**Happy HDR Processing!** 📸✨ | **Version 1.0.1**
