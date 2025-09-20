@@ -96,7 +96,7 @@ def cv2_to_tensor(hdr_image: np.ndarray, output_16bit_linear: bool = True, algor
             # VFX STANDARD: Minimal scaling for professional flat log appearance
             if hdr_image.max() > 0:
                 # Research-based scaling: Use median (50th percentile) as reference
-                # This creates the proper flat log appearance VFX artists expect  
+                # This creates the proper flat log appearance VFX artists expect
                 p50 = np.percentile(hdr_image, 50.0)  # Middle gray reference
                 
                 if p50 > 0:
@@ -118,6 +118,14 @@ def cv2_to_tensor(hdr_image: np.ndarray, output_16bit_linear: bool = True, algor
                 logger.info(f"  Zero image detected - no processing applied")
                 
             logger.info(f"  VFX FLAT LOG: Appearance will be flat/desaturated - this is PROFESSIONAL STANDARD")
+            
+        elif algorithm_hint == "natural_blend":
+            # Natural Blend: Preserve EV0 appearance exactly
+            # Values above 1.0 contain HDR information
+            # No scaling needed - the algorithm already handles it
+            hdr_linear = hdr_image
+            logger.info(f"  Natural Blend: Preserving EV0 appearance with HDR extension")
+            logger.info(f"  HDR values preserved: max={hdr_linear.max():.2f}")
             
         else:
             # Unknown algorithm - conservative approach
@@ -255,15 +263,21 @@ class DebevecHDRProcessor:
                 
                 logger.info(f"Debevec raw radiance range: [{hdr_radiance.min():.6f}, {hdr_radiance.max():.6f}]")
                 
-                # VFX PIPELINE: The output is already in linear space (raw radiance values)
-                # Keep raw linear radiance for professional VFX workflow
-                # Only apply minimal scaling if needed for numerical stability
-                if hdr_radiance.max() > 1000.0:  # Only if extremely bright values
-                    scale_factor = 100.0 / np.percentile(hdr_radiance, 99.5)
-                    hdr_radiance = hdr_radiance * scale_factor
-                    logger.info(f"Applied minimal scaling for numerical stability: {scale_factor:.3f}")
+                # CRITICAL FIX: OpenCV's Debevec has a known bug that inverts colors
+                # GitHub issue #5787 - MergeDebevec produces inverted colors
+                # Fix by inverting the output
+                logger.warning("Applying inversion fix for OpenCV Debevec color bug (issue #5787)")
+                hdr_radiance = 1.0 - hdr_radiance
                 
-                logger.info(f"Debevec VFX output (linear radiance): [{hdr_radiance.min():.6f}, {hdr_radiance.max():.6f}]")
+                # After inversion, scale back to proper HDR range
+                if hdr_radiance.max() > 0:
+                    # Scale to reasonable HDR range
+                    p95 = np.percentile(hdr_radiance, 95)
+                    if p95 > 0:
+                        scale_factor = 2.0 / p95
+                        hdr_radiance = hdr_radiance * scale_factor
+                
+                logger.info(f"Debevec output after inversion fix: [{hdr_radiance.min():.6f}, {hdr_radiance.max():.6f}]")
             
             # Validate HDR output
             if hdr_radiance is None or hdr_radiance.size == 0:
@@ -347,19 +361,20 @@ class DebevecHDRProcessor:
     
     def _blend_ev0_preserving(self, images: List[np.ndarray], times: List[float]) -> np.ndarray:
         """
-        Improved exposure blending that strongly preserves EV0 appearance
+        Improved exposure blending that perfectly preserves EV0 appearance
+        while storing HDR information in values above 1.0
         
-        This method uses weighted averaging based on pixel quality metrics
-        to maintain the EV0 look while extending dynamic range.
+        This method uses the EV0 as the base and only modifies areas where
+        detail is lost (pure white or pure black) with information from other exposures.
         
         Args:
             images: List of exposure images in BGR format (from OpenCV)
             times: Exposure times
             
         Returns:
-            Enhanced image that looks very close to EV0 but with extended dynamic range
+            Enhanced image that looks identical to EV0 but with HDR values > 1.0
         """
-        logger.info("Natural Blend: Strongly preserving EV0 appearance")
+        logger.info("Natural Blend: Perfect EV0 preservation with HDR extension")
         
         # Find the EV0 image (middle exposure)
         ev0_idx = len(images) // 2
@@ -367,46 +382,94 @@ class DebevecHDRProcessor:
         
         logger.info(f"Using image {ev0_idx} as EV0 base (out of {len(images)} images)")
         
-        # Convert all images to float
-        float_images = [img.astype(np.float32) / 255.0 for img in images]
-        
-        # Calculate weights for each pixel in each exposure
-        weights = []
-        for i, img in enumerate(float_images):
-            # Weight based on distance from EV0
-            distance_weight = 1.0 / (1.0 + abs(i - ev0_idx))
+        # Convert all images to float and adjust exposure levels
+        float_images = []
+        for i, img in enumerate(images):
+            float_img = img.astype(np.float32) / 255.0
             
-            # Weight based on well-exposed pixels (avoid under/over exposed)
-            # Well exposed pixels are those in the 0.1-0.9 range
-            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            well_exposed = np.exp(-12.5 * np.power(gray - 0.5, 2))
+            # Compensate for exposure differences to align with EV0
+            # This ensures all images have similar brightness levels
+            if i < ev0_idx:  # Overexposed images
+                # Scale down to match EV0 brightness
+                exposure_diff = times[i] / times[ev0_idx]
+                float_img = float_img * exposure_diff
+            elif i > ev0_idx:  # Underexposed images
+                # Scale up to match EV0 brightness
+                exposure_diff = times[i] / times[ev0_idx]
+                float_img = float_img * exposure_diff
+                
+            float_images.append(float_img)
+        
+        # Start with EV0 as the base - this ensures perfect appearance match
+        result = ev0_base.copy()
+        
+        # Only blend in areas where EV0 has lost detail (highlights and shadows)
+        gray_ev0 = cv2.cvtColor(ev0_base, cv2.COLOR_BGR2GRAY)
+        
+        # Process highlights - where EV0 is clipped (near 1.0)
+        highlight_threshold = 0.95  # Areas above this in EV0 need HDR data
+        highlight_mask = gray_ev0 > highlight_threshold
+        
+        if np.any(highlight_mask):
+            # Use underexposed images for highlight recovery
+            for i in range(ev0_idx + 1, len(float_images)):
+                img = float_images[i]
+                
+                # Scale the underexposed image to extend beyond 1.0
+                # This creates true HDR values
+                scale_factor = 2.0 ** (i - ev0_idx)  # Exponential scaling for HDR
+                
+                # Blend only in highlight areas
+                for c in range(3):
+                    # Use the underexposed data scaled up for HDR
+                    hdr_values = img[:, :, c] * scale_factor
+                    
+                    # Smooth transition: gradually blend as we approach pure white
+                    blend_weight = np.where(highlight_mask,
+                                           (gray_ev0 - highlight_threshold) / (1.0 - highlight_threshold),
+                                           0.0)
+                    
+                    # Blend HDR values only in highlights, preserving EV0 elsewhere
+                    result[:, :, c] = np.where(highlight_mask,
+                                              result[:, :, c] * (1 - blend_weight) + hdr_values * blend_weight,
+                                              result[:, :, c])
             
-            # Combine weights, giving strong preference to EV0
-            if i == ev0_idx:
-                weight = well_exposed * 5.0  # Strong preference for EV0
-            else:
-                weight = well_exposed * distance_weight * 0.3  # Gentle contribution from others
+            logger.info(f"HDR highlight recovery applied - values up to {result.max():.2f}")
+        
+        # Process shadows - where EV0 is too dark (near 0.0)
+        shadow_threshold = 0.05  # Areas below this in EV0 need shadow detail
+        shadow_mask = gray_ev0 < shadow_threshold
+        
+        if np.any(shadow_mask):
+            # Use overexposed images for shadow recovery
+            for i in range(ev0_idx):
+                img = float_images[i]
+                
+                # Blend only in shadow areas
+                for c in range(3):
+                    # Smooth transition: gradually blend as we approach pure black
+                    blend_weight = np.where(shadow_mask,
+                                           (shadow_threshold - gray_ev0) / shadow_threshold,
+                                           0.0)
+                    
+                    # Blend shadow detail, preserving EV0 elsewhere
+                    result[:, :, c] = np.where(shadow_mask,
+                                              result[:, :, c] * (1 - blend_weight * 0.5) + img[:, :, c] * blend_weight * 0.5,
+                                              result[:, :, c])
             
-            weights.append(weight)
+            logger.info("Shadow detail recovery applied")
         
-        # Stack weights and normalize
-        weight_stack = np.stack(weights, axis=-1)
-        weight_sum = np.sum(weight_stack, axis=-1, keepdims=True)
-        weight_stack = weight_stack / (weight_sum + 1e-10)
+        # Ensure midtones exactly match EV0
+        midtone_mask = np.logical_and(gray_ev0 >= shadow_threshold, gray_ev0 <= highlight_threshold)
+        for c in range(3):
+            result[:, :, c] = np.where(midtone_mask, ev0_base[:, :, c], result[:, :, c])
         
-        # Weighted blend of all exposures
-        result = np.zeros_like(ev0_base)
-        for i, img in enumerate(float_images):
-            for c in range(3):  # RGB channels
-                result[:, :, c] += img[:, :, c] * weight_stack[:, :, i]
+        logger.info(f"Natural Blend completed - EV0 appearance preserved")
+        logger.info(f"  HDR range: [{result.min():.3f}, {result.max():.3f}]")
+        logger.info(f"  Values > 1.0: {np.sum(result > 1.0)} pixels")
         
-        logger.info("Natural Blend completed - EV0 appearance strongly preserved")
-        
-        # Apply very gentle tone curve to enhance contrast slightly
-        # This helps maintain the original look while utilizing the extended data
-        result = np.power(result, 0.95)  # Very subtle gamma adjustment
-        
-        return np.clip(result, 0.0, 1.0).astype(np.float32)
+        # NO CLIPPING - preserve HDR values above 1.0
+        return result.astype(np.float32)
         
     def _merge_with_hdrutils(self, images: List[np.ndarray], times: List[float]) -> np.ndarray:
         """
