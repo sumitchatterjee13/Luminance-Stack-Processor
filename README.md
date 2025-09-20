@@ -23,11 +23,9 @@ Professional HDR (High Dynamic Range) processing nodes for ComfyUI using the **D
 
 ## 📋 Requirements
 
-- ComfyUI
+- ComfyUI (includes NumPy and PyTorch)
 - Python 3.8+
 - OpenCV (cv2) >= 4.8.0
-- NumPy >= 1.21.0
-- PyTorch >= 1.9.0
 
 ## 🚀 Installation
 
@@ -42,13 +40,27 @@ Professional HDR (High Dynamic Range) processing nodes for ComfyUI using the **D
    ```
 
 2. **Install Dependencies**:
+   
+   **For ComfyUI Portable (Recommended)**:
    ```bash
-   pip install -r requirements.txt
+   # Navigate to your ComfyUI portable directory and use embedded Python
+   cd path/to/ComfyUI_windows_portable
+   python_embeded\python.exe -m pip install opencv-python>=4.8.0
    ```
    
-   Or install manually:
+   **For Standard ComfyUI Installation**:
    ```bash
-   pip install opencv-python>=4.8.0 numpy>=1.21.0 torch>=1.9.0
+   # Use your system Python or ComfyUI's virtual environment
+   pip install opencv-python>=4.8.0
+   ```
+   
+   **Or install from requirements.txt**:
+   ```bash
+   # For portable version
+   python_embeded\python.exe -m pip install -r requirements.txt
+   
+   # For standard installation
+   pip install -r requirements.txt
    ```
 
 3. **Restart ComfyUI** to load the new nodes

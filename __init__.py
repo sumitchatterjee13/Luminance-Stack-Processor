@@ -7,13 +7,11 @@ This module provides two custom nodes for ComfyUI:
 2. Luminance Stack Processor (5 Stops) - For processing EV+4, EV+2, EV+0, EV-2, EV-4 exposures
 
 Requirements:
-- OpenCV (cv2)
-- NumPy
-- PyTorch
+- OpenCV (cv2) - NumPy and PyTorch are provided by ComfyUI
 
 Installation:
 1. Place this folder in your ComfyUI/custom_nodes/ directory
-2. Install required dependencies: pip install opencv-python numpy torch
+2. Install OpenCV: python_embeded\python.exe -m pip install opencv-python (for portable)
 3. Restart ComfyUI
 
 Author: Sumit Chatterjee
@@ -56,8 +54,9 @@ try:
     
 except ImportError as e:
     print(f"❌ Failed to import Luminance Stack Processor nodes: {e}")
-    print("   Please ensure all required dependencies are installed:")
-    print("   pip install opencv-python numpy torch")
+    print("   Please ensure OpenCV is installed:")
+    print("   For ComfyUI Portable: python_embeded\\python.exe -m pip install opencv-python")
+    print("   For Standard ComfyUI: pip install opencv-python")
     
     # Provide empty mappings to prevent ComfyUI errors
     NODE_CLASS_MAPPINGS = {}
