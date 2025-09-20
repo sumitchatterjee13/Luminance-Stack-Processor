@@ -7,19 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- Nothing yet
+### Added  
+- **NEW: EV0-Based Blending Algorithm** - Now default! Preserves exact EV0 appearance with enhanced dynamic range
+- **Smart luminance masking** - Seamless highlight and shadow detail recovery
 
 ### Changed
 - **Optimized for 8-bit input workflow** - Removed unnecessary 8-bit conversion since inputs are already 8-bit
 - **Enhanced 16-bit linear output** - Improved scaling algorithm for better 16-bit range utilization
+- **Changed default algorithm** - EV0-Based is now default instead of Mertens for natural results
 
 ### Fixed
+- **CRITICAL: Fixed contrast issues** - EV0-Based algorithm maintains original image contrast
 - **CRITICAL: Fixed color inversion issues** - Added proper BGR↔RGB conversion for correct color handling
 - **Fixed brightness problems** - Improved scaling and algorithm selection  
-- **Added Mertens Exposure Fusion algorithm** - Now default, produces better results like Adobe Lightroom
+- **Added Mertens Exposure Fusion algorithm** - Alternative for Lightroom-style results
 - **Added Robertson algorithm** - Alternative HDR method for different use cases
-- **Enhanced algorithm selection** - Users can choose between Mertens (default), Debevec, and Robertson
+- **Enhanced algorithm selection** - Users can choose between EV0-Based (default), Mertens, Debevec, and Robertson
 - **CRITICAL: Fixed Debevec algorithm issues** - Added Reinhard tone mapping to fix brightness/color inversion
 - **Improved Debevec output** - Now produces natural results similar to Mertens
 - **Enhanced per-algorithm scaling** - Different scaling strategies for different algorithms

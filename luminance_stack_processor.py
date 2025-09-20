@@ -49,7 +49,11 @@ def cv2_to_tensor(hdr_image: np.ndarray, output_16bit_linear: bool = True, algor
         # Scale to 16-bit range while preserving linear characteristics
         
         # Different scaling strategies based on algorithm
-        if algorithm_hint == "mertens":
+        if algorithm_hint == "ev0_base":
+            # EV0-based should have similar range to original images, use 85th percentile
+            scale_reference = np.percentile(hdr_image, 85.0)
+            target_scale = 0.85  # 85% of 16-bit range
+        elif algorithm_hint == "mertens":
             # Mertens typically produces 0-2 range, use 90th percentile
             scale_reference = np.percentile(hdr_image, 90.0)
             target_scale = 0.8  # 80% of 16-bit range
@@ -73,7 +77,16 @@ def cv2_to_tensor(hdr_image: np.ndarray, output_16bit_linear: bool = True, algor
         
         logger.info(f"HDR 16-bit linear output ({algorithm_hint}):")
         logger.info(f"  Original range: [{hdr_image.min():.6f}, {hdr_image.max():.6f}]")
-        logger.info(f"  Scale reference ({90 if algorithm_hint == 'mertens' else 95}th percentile): {scale_reference:.6f}")
+        
+        # Choose percentile based on algorithm
+        if algorithm_hint == "ev0_base":
+            percentile_used = 85
+        elif algorithm_hint == "mertens":
+            percentile_used = 90
+        else:
+            percentile_used = 95
+            
+        logger.info(f"  Scale reference ({percentile_used}th percentile): {scale_reference:.6f}")
         logger.info(f"  16-bit range: [{hdr_16bit_linear.min():.1f}, {hdr_16bit_linear.max():.1f}]")
         logger.info(f"  Final range: [{normalized_16bit.min():.6f}, {normalized_16bit.max():.6f}]")
         logger.info(f"  Scale factor: {scale_factor:.2f}")
@@ -148,6 +161,11 @@ class DebevecHDRProcessor:
                 # Mertens output is typically in 0-1 range, scale appropriately
                 if hdr_radiance.max() <= 1.0:
                     hdr_radiance = hdr_radiance * 2.0  # Boost for better dynamic range
+                    
+            elif algorithm == "ev0_base":
+                # EV0-based exposure blending - maintains EV0 appearance with enhanced dynamic range
+                logger.info("Using EV0-based exposure blending...")
+                hdr_radiance = self._blend_ev0_based(processed_images, times)
                 
             elif algorithm == "robertson":
                 # Robertson algorithm - alternative to Debevec
@@ -251,6 +269,98 @@ class DebevecHDRProcessor:
                 normalized = hdr_image / np.percentile(hdr_image, 95)
                 return np.clip(normalized, 0.0, 5.0).astype(np.float32)
             return hdr_image.astype(np.float32)
+    
+    def _blend_ev0_based(self, images: List[np.ndarray], times: List[float]) -> np.ndarray:
+        """
+        Blend exposures using EV0 as base appearance with enhanced dynamic range
+        
+        This method preserves the exact look of the EV0 image while adding
+        highlight and shadow detail from other exposures.
+        
+        Args:
+            images: List of exposure images (should be ordered from overexposed to underexposed)
+            times: Exposure times
+            
+        Returns:
+            Enhanced image that looks like EV0 but with extended dynamic range
+        """
+        logger.info("EV0-based blending: Preserving EV0 appearance with enhanced dynamic range")
+        
+        # Find the EV0 image (middle exposure - should be the normal exposure)
+        ev0_idx = len(images) // 2  # Middle image is typically EV0
+        ev0_base = images[ev0_idx].astype(np.float32) / 255.0
+        
+        logger.info(f"Using image {ev0_idx} as EV0 base (out of {len(images)} images)")
+        
+        # Convert all images to float for processing
+        float_images = [img.astype(np.float32) / 255.0 for img in images]
+        
+        # Create luminance masks for blending
+        ev0_gray = cv2.cvtColor(ev0_base, cv2.COLOR_RGB2GRAY)
+        
+        # Start with EV0 as the base result
+        result = ev0_base.copy()
+        
+        # Blend highlights from underexposed images (better highlight detail)
+        for i in range(ev0_idx + 1, len(float_images)):
+            img = float_images[i]
+            
+            # Create highlight mask - where EV0 is bright but this image has detail
+            highlight_mask = self._create_highlight_mask(ev0_gray)
+            
+            # Blend highlight areas
+            for c in range(3):  # RGB channels
+                result[:, :, c] = (1 - highlight_mask) * result[:, :, c] + highlight_mask * img[:, :, c]
+                
+            logger.info(f"Blended highlights from underexposed image {i}")
+        
+        # Blend shadows from overexposed images (better shadow detail)  
+        for i in range(ev0_idx):
+            img = float_images[i]
+            
+            # Create shadow mask - where EV0 is dark but this image has detail
+            shadow_mask = self._create_shadow_mask(ev0_gray)
+            
+            # Blend shadow areas
+            for c in range(3):  # RGB channels
+                result[:, :, c] = (1 - shadow_mask) * result[:, :, c] + shadow_mask * img[:, :, c]
+                
+            logger.info(f"Blended shadows from overexposed image {i}")
+        
+        # Convert back to 0-255 range for consistency with other algorithms
+        result_8bit = np.clip(result * 255.0, 0, 255).astype(np.uint8)
+        
+        logger.info("EV0-based blending completed - appearance preserved with enhanced dynamic range")
+        
+        return result_8bit.astype(np.float32) / 255.0  # Return as float32 in 0-1 range
+    
+    def _create_highlight_mask(self, gray_image: np.ndarray, threshold: float = 0.7) -> np.ndarray:
+        """Create a mask for highlight areas that need detail recovery"""
+        # Smooth transition for highlights
+        mask = np.zeros_like(gray_image, dtype=np.float32)
+        
+        # Areas above threshold get progressively more blending
+        bright_areas = gray_image > threshold
+        mask[bright_areas] = (gray_image[bright_areas] - threshold) / (1.0 - threshold)
+        
+        # Smooth the mask to avoid harsh transitions
+        mask = cv2.GaussianBlur(mask, (21, 21), 0)
+        
+        return np.clip(mask, 0, 1)
+    
+    def _create_shadow_mask(self, gray_image: np.ndarray, threshold: float = 0.3) -> np.ndarray:
+        """Create a mask for shadow areas that need detail recovery"""
+        # Smooth transition for shadows
+        mask = np.zeros_like(gray_image, dtype=np.float32)
+        
+        # Areas below threshold get progressively more blending
+        dark_areas = gray_image < threshold
+        mask[dark_areas] = (threshold - gray_image[dark_areas]) / threshold
+        
+        # Smooth the mask to avoid harsh transitions
+        mask = cv2.GaussianBlur(mask, (21, 21), 0)
+        
+        return np.clip(mask, 0, 1)
 
 
 class LuminanceStackProcessor3Stops:
@@ -275,8 +385,8 @@ class LuminanceStackProcessor3Stops:
                     "step": 0.1,
                     "display": "number"
                 }),
-                "hdr_algorithm": (["mertens", "debevec", "robertson"], {
-                    "default": "mertens"
+                "hdr_algorithm": (["ev0_base", "mertens", "debevec", "robertson"], {
+                    "default": "ev0_base"
                 }),
             }
         }
@@ -289,7 +399,7 @@ class LuminanceStackProcessor3Stops:
     def __init__(self):
         self.processor = DebevecHDRProcessor()
     
-    def process_3_stop_hdr(self, ev_plus_2, ev_0, ev_minus_2, exposure_step=2.0, hdr_algorithm="mertens"):
+    def process_3_stop_hdr(self, ev_plus_2, ev_0, ev_minus_2, exposure_step=2.0, hdr_algorithm="ev0_base"):
         """
         Process 3-stop HDR merge
         
@@ -373,7 +483,7 @@ class LuminanceStackProcessor5Stops:
     def __init__(self):
         self.processor = DebevecHDRProcessor()
     
-    def process_5_stop_hdr(self, ev_plus_4, ev_plus_2, ev_0, ev_minus_2, ev_minus_4, exposure_step=2.0, hdr_algorithm="mertens"):
+    def process_5_stop_hdr(self, ev_plus_4, ev_plus_2, ev_0, ev_minus_2, ev_minus_4, exposure_step=2.0, hdr_algorithm="ev0_base"):
         """
         Process 5-stop HDR merge
         
