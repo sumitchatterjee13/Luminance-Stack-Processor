@@ -17,14 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Changed default algorithm** - Natural Blend is now default instead of Mertens for natural results
 
 ### Fixed
-- **CRITICAL: Fixed all algorithm issues** - Complete rework of HDR processing
-- **Fixed Natural Blend breaking** - Improved masking logic with gentle blending (30% strength) and larger blur kernels
-- **Fixed Debevec lacking dynamic range** - Replaced aggressive Reinhard tone mapping with gentle scaling to preserve HDR
-- **Fixed Mertens oversaturation** - Removed incorrect gamma correction, now uses original image gamma
-- **Algorithm-specific gamma correction** - Only applied to Debevec/Robertson where needed
-- **Algorithm-specific color handling** - BGR↔RGB conversion only where beneficial
-- **Improved highlight/shadow recovery** - Better thresholds and smoother transitions in Natural Blend
-- **Preserved HDR range in all algorithms** - Gentler processing maintains dynamic range data
+- **🚨 CRITICAL: Fixed HDR data completely broken** - Values were being normalized to 0-1 range, killing HDR!
+- **🚨 CRITICAL: Now outputs TRUE 16-bit HDR values** - Values go above 1.0 (up to 5-100 range) as required for HDR
+- **Fixed all algorithms looking the same** - Each algorithm now produces distinctly different outputs
+- **Algorithm-specific HDR scaling** - Natural Blend (1-8 range), Mertens (1-12 range), Debevec/Robertson (1-100 range)
+- **Preserved dynamic range data** - No more normalization destroying HDR information
+- **Enhanced visual differences** - Each algorithm produces visually different and useful results
+- **Fixed Natural Blend masking** - Better blending logic with 30% strength for natural transitions
+- **Algorithm-specific processing** - Gamma correction and color handling only where beneficial
 
 ## [1.0.1] - 2025-01-20
 

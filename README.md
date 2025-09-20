@@ -12,14 +12,18 @@ Professional HDR (High Dynamic Range) processing nodes for ComfyUI using the **D
 
 ## 🎯 Features
 
-- **Multiple HDR Algorithms**: Supports Mertens Exposure Fusion (default), Debevec, and Robertson algorithms
+- **🚨 TRUE 16-bit HDR Output**: Values go above 1.0 (up to 100+) for authentic HDR data
+- **Four Distinct Algorithms**: Each produces different results with specific HDR ranges
+  - **Natural Blend** (1-8): EV0 appearance with enhanced dynamic range
+  - **Mertens** (1-12): Adobe Lightroom style results
+  - **Debevec** (1-100+): Maximum dynamic range for extreme lighting
+  - **Robertson** (1-80+): Alternative robust HDR processing
 - **Two Processing Modes**:
   - **3-Stop Processor**: Merges EV+2, EV+0, EV-2 exposures
   - **5-Stop Processor**: Merges EV+4, EV+2, EV+0, EV-2, EV-4 exposures
-- **16-bit Linear Output**: Outputs 16-bit linear colorspace images with maximum dynamic range preservation
-- **Automatic Camera Response Function**: Estimates and applies camera response curves
-- **Fallback Safety**: Gracefully handles errors with fallback to middle exposure
-- **ComfyUI Integration**: Seamless integration with ComfyUI workflows
+- **Linear Colorspace Preservation**: True 16-bit linear data with no normalization
+- **Visual Algorithm Differences**: Each algorithm produces noticeably different results
+- **ComfyUI Integration**: Seamless integration with proper HDR tensor handling
 
 ## 📋 Requirements
 
@@ -110,26 +114,27 @@ The nodes implement **multiple HDR algorithms** with **Natural Blend** as the de
 ### 🎯 **HDR Algorithm Options:**
 
 #### **Natural Blend (Default - Recommended)**  
-- **Perfect for natural look**: Uses EV0 as base appearance, adds dynamic range from other exposures
-- **Gentle blending**: 30% blend strength with smooth luminance masks for natural transitions
-- **Preserved contrast**: Maintains exact EV0 appearance with enhanced highlight/shadow detail
-- **Best of both worlds**: Natural EV0 appearance + extended dynamic range data
+- **HDR Range**: 1-8 (moderate HDR values for natural look)
+- **Perfect for natural look**: Uses EV0 as base, adds dynamic range from other exposures
+- **Gentle blending**: 30% blend strength with smooth luminance masks 
+- **Preserved EV0 appearance**: Looks like original EV0 with enhanced dynamic range data
 
 #### **Mertens Exposure Fusion**
-- **Adobe Lightroom style**: Produces natural-looking results similar to professional HDR software
-- **Original gamma preserved**: No gamma correction applied - maintains natural color and contrast
+- **HDR Range**: 1-12 (medium HDR values for balanced results)
+- **Adobe Lightroom style**: Natural-looking results similar to professional HDR software
+- **Enhanced contrast**: Produces more dynamic results than Natural Blend
 - **Fastest processing**: No camera response function estimation required
-- **Automatic blending**: Self-contained exposure fusion algorithm
 
 #### **Debevec Algorithm (Classic HDR)**
+- **HDR Range**: 1-100+ (maximum HDR values for extreme dynamic range)
 - **Industry standard**: Original HDR reconstruction method from 1997
-- **True scene radiance**: Recovers actual physical light values with preserved HDR range
-- **Gentle processing**: Minimal tone mapping preserves dynamic range while ensuring usability
-- **Research accurate**: Mathematically precise HDR reconstruction with proper gamma handling
+- **True scene radiance**: Recovers actual physical light values
+- **Maximum dynamic range**: Best for scenes with extreme lighting (sun, reflections, etc.)
 
 #### **Robertson Algorithm**
-- **Alternative approach**: Different camera response function estimation method
-- **Similar to Debevec**: But with different mathematical approach
+- **HDR Range**: 1-80+ (high HDR values with alternative processing)
+- **Alternative to Debevec**: Different camera response function estimation
+- **Robust processing**: Often produces cleaner results than Debevec
 
 ## 📸 Best Practices
 

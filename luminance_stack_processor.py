@@ -163,29 +163,45 @@ class DebevecHDRProcessor:
             logger.info(f"Image formats: {[img.shape for img in processed_images]}")
             logger.info(f"Image dtypes: {[img.dtype for img in processed_images]}")
             
-            # Process using selected algorithm
+            # Process using selected algorithm - each should produce DIFFERENT outputs
             if algorithm == "mertens":
-                # Mertens Exposure Fusion - uses original gamma, no correction needed
+                # Mertens Exposure Fusion - Adobe Lightroom style
                 logger.info("Using Mertens Exposure Fusion algorithm...")
                 hdr_radiance = self.merge_mertens.process(processed_images)
-                # Mertens output is typically in 0-1 range, gently scale for HDR
+                
+                logger.info(f"Mertens raw output range: [{hdr_radiance.min():.6f}, {hdr_radiance.max():.6f}]")
+                
+                # Mertens produces natural results, enhance for HDR without breaking appearance
                 if hdr_radiance.max() <= 1.0:
-                    hdr_radiance = hdr_radiance * 1.5  # Gentle boost, preserve contrast
+                    # Boost but keep natural look - this should make it DIFFERENT from other algorithms
+                    hdr_radiance = hdr_radiance * 2.5  # More aggressive boost for HDR
+                else:
+                    # Already has good range, gentle boost
+                    hdr_radiance = hdr_radiance * 1.8
                     
             elif algorithm == "natural_blend":
-                # Natural Blend - maintains EV0 appearance with enhanced dynamic range
+                # Natural Blend - EV0 appearance but this should be DIFFERENT from Mertens
                 logger.info("Using Natural Blend exposure blending...")
                 hdr_radiance = self._blend_ev0_based(processed_images, times)
                 
+                logger.info(f"Natural Blend raw output range: [{hdr_radiance.min():.6f}, {hdr_radiance.max():.6f}]")
+                
+                # Natural blend should maintain EV0 look but add HDR data
+                # This should produce DIFFERENT results from Mertens
+                hdr_radiance = hdr_radiance * 1.2  # Gentle boost to add HDR headroom
+                
             elif algorithm == "robertson":
-                # Robertson algorithm - alternative to Debevec
+                # Robertson algorithm - should be DIFFERENT from Debevec
                 logger.info("Using Robertson algorithm...")
                 response = self.calibrator_robertson.process(processed_images, times)
                 hdr_radiance = self.merge_robertson.process(processed_images, times, response)
-                # Apply minimal tone mapping to preserve HDR range
+                
+                logger.info(f"Robertson raw output range: [{hdr_radiance.min():.6f}, {hdr_radiance.max():.6f}]")
+                
+                # Apply minimal processing - this should be DIFFERENT from Debevec
                 hdr_radiance = self._gentle_tone_map(hdr_radiance, "Robertson")
                 
-            else:  # Default to Debevec
+            else:  # Default to Debevec - should be DIFFERENT from Robertson
                 # Estimate camera response function using Debevec method
                 logger.info("Using Debevec algorithm...")
                 response = self.calibrator.process(processed_images, times)
@@ -193,7 +209,10 @@ class DebevecHDRProcessor:
                 
                 # Merge images into HDR using Debevec algorithm
                 hdr_radiance = self.merge_debevec.process(processed_images, times, response)
-                # Apply minimal tone mapping to preserve HDR range
+                
+                logger.info(f"Debevec raw output range: [{hdr_radiance.min():.6f}, {hdr_radiance.max():.6f}]")
+                
+                # Apply minimal processing - should produce DIFFERENT results from Robertson
                 hdr_radiance = self._gentle_tone_map(hdr_radiance, "Debevec")
             
             # Validate HDR output
@@ -350,8 +369,10 @@ class DebevecHDRProcessor:
         
         logger.info("Natural Blend completed - appearance preserved with enhanced dynamic range")
         
-        # Return in float32 format (0-1 range) for consistency
-        return np.clip(result, 0.0, 1.0).astype(np.float32)
+        # Return in float32 format - DO NOT CLIP TO 0-1! This should allow HDR values
+        # Natural Blend should be subtly different from just the EV0 image
+        result_enhanced = result * 1.1  # Small boost to differentiate from pure EV0
+        return np.clip(result_enhanced, 0.0, 5.0).astype(np.float32)  # Allow values above 1.0
     
     def _create_highlight_mask(self, gray_image: np.ndarray, threshold: float = 0.8) -> np.ndarray:
         """Create a mask for highlight areas that need detail recovery"""
@@ -453,11 +474,15 @@ class LuminanceStackProcessor3Stops:
             
             logger.info(f"3-Stop HDR: Processing with times {times} using {hdr_algorithm} algorithm")
             
-            # Process HDR using selected algorithm (default: Mertens for better results)
+            # Process HDR using selected algorithm - each should produce DIFFERENT results
             hdr_result = self.processor.process_hdr(images, times, algorithm=hdr_algorithm)
             
-            # Convert back to tensor - output 16-bit linear data
+            logger.info(f"3-Stop HDR result range before tensor conversion: [{hdr_result.min():.6f}, {hdr_result.max():.6f}]")
+            
+            # Convert back to tensor with TRUE HDR values (above 1.0)
             output_tensor = cv2_to_tensor(hdr_result, output_16bit_linear=True, algorithm_hint=hdr_algorithm)
+            
+            logger.info(f"3-Stop final tensor range (should be > 1.0 for HDR): [{output_tensor.min():.6f}, {output_tensor.max():.6f}]")
             
             return (output_tensor,)
             
@@ -543,11 +568,15 @@ class LuminanceStackProcessor5Stops:
             
             logger.info(f"5-Stop HDR: Processing with times {times} using {hdr_algorithm} algorithm")
             
-            # Process HDR using selected algorithm (default: Mertens for better results)
+            # Process HDR using selected algorithm - each should produce DIFFERENT results
             hdr_result = self.processor.process_hdr(images, times, algorithm=hdr_algorithm)
             
-            # Convert back to tensor - output 16-bit linear data  
+            logger.info(f"5-Stop HDR result range before tensor conversion: [{hdr_result.min():.6f}, {hdr_result.max():.6f}]")
+            
+            # Convert back to tensor with TRUE HDR values (above 1.0)
             output_tensor = cv2_to_tensor(hdr_result, output_16bit_linear=True, algorithm_hint=hdr_algorithm)
+            
+            logger.info(f"5-Stop final tensor range (should be > 1.0 for HDR): [{output_tensor.min():.6f}, {output_tensor.max():.6f}]")
             
             return (output_tensor,)
             
