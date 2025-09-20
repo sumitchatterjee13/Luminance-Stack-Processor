@@ -5,6 +5,44 @@ Implements HDR processing using the Debevec Algorithm for multiple exposure fusi
 Author: Sumit Chatterjee
 Version: 1.0.1
 Semantic Versioning: MAJOR.MINOR.PATCH
+
+=== VFX PIPELINE DOCUMENTATION ===
+
+IMPORTANT: Understanding the Debevec Algorithm for Professional VFX
+
+The Debevec algorithm is designed to recover the camera response function and create
+true HDR radiance maps from multiple exposures. Here's what you need to know:
+
+INPUT FORMAT:
+- The algorithm expects 8-bit sRGB images (0-255 range) as input
+- DO NOT pre-linearize or apply gamma correction before Debevec/Robertson
+- The algorithm internally recovers the camera response curve (including gamma)
+
+OUTPUT FORMAT:
+- The output is LINEAR RADIANCE values (physical light intensity)
+- Values can and should exceed 1.0 for bright areas (true HDR)
+- The output will look FLAT and DESATURATED - this is CORRECT for VFX
+- This "flat log" appearance is the professional standard for compositing
+
+WHY IT LOOKS "WRONG" (but isn't):
+- Raw linear radiance looks flat/washed out on standard displays
+- This is because displays apply gamma correction for viewing
+- VFX artists expect this flat appearance for proper compositing
+- The data contains full dynamic range for professional color grading
+
+WORKFLOW:
+1. Input: Multiple 8-bit sRGB exposures
+2. Debevec: Recovers camera response & creates linear radiance map
+3. Output: 16-bit EXR with linear radiance values
+4. Post-production: Apply tone mapping/grading in compositing software
+
+ALGORITHMS:
+- "natural_blend": Preserves EV0 appearance with enhanced dynamic range
+- "mertens": Exposure fusion without HDR recovery (good for display)
+- "debevec": True HDR radiance recovery (flat/linear for VFX)
+- "robertson": Alternative HDR recovery method (also flat/linear)
+
+===========================================
 """
 
 import numpy as np
@@ -20,8 +58,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def tensor_to_cv2(tensor: torch.Tensor, apply_gamma_correction: bool = False) -> np.ndarray:
-    """Convert ComfyUI tensor to OpenCV format for HDR processing - VFX Pipeline Fixed"""
+def tensor_to_cv2(tensor: torch.Tensor) -> np.ndarray:
+    """Convert ComfyUI tensor to OpenCV format for HDR processing
+    
+    IMPORTANT: OpenCV's Debevec and Robertson algorithms expect 8-bit sRGB images as input.
+    They internally recover the camera response function, so we should NOT pre-linearize the images.
+    """
     # ComfyUI tensors are typically [B, H, W, C] in 0-1 range
     if len(tensor.shape) == 4:
         tensor = tensor.squeeze(0)  # Remove batch dimension
@@ -29,25 +71,8 @@ def tensor_to_cv2(tensor: torch.Tensor, apply_gamma_correction: bool = False) ->
     # Convert to numpy
     image = tensor.cpu().numpy()
     
-    if apply_gamma_correction:
-        # CRITICAL VFX FIX: Proper sRGB to Linear conversion for Debevec/Robertson
-        # This is ESSENTIAL for camera response function recovery
-        logger.info("Applying sRGB to Linear conversion (CRITICAL for Debevec accuracy)")
-        
-        # Proper sRGB to Linear gamma correction (based on research)
-        image_linear = np.where(image <= 0.04045, 
-                               image / 12.92,
-                               np.power((image + 0.055) / 1.055, 2.4))
-        
-        # Convert to 8-bit for OpenCV HDR functions
-        image_8bit = np.clip(image_linear * 255.0, 0, 255).astype(np.uint8)
-        logger.info(f"sRGB->Linear conversion applied - critical for VFX flat log profile")
-        
-    else:
-        # For Mertens and Natural Blend - keep original gamma
-        image_8bit = np.clip(image * 255.0, 0, 255).astype(np.uint8)
-        logger.info(f"Original gamma preserved - no conversion applied")
-    
+    # Convert to 8-bit sRGB (no gamma correction - Debevec/Robertson expect sRGB input)
+    image_8bit = np.clip(image * 255.0, 0, 255).astype(np.uint8)
     logger.info(f"Converted to OpenCV: shape={image_8bit.shape}, dtype={image_8bit.dtype}, range=[{image_8bit.min()}, {image_8bit.max()}]")
     
     return image_8bit
@@ -80,10 +105,11 @@ def cv2_to_tensor(hdr_image: np.ndarray, output_16bit_linear: bool = True, algor
             hdr_linear = np.clip(hdr_linear, 0.0, 12.0)
             
         elif algorithm_hint in ["debevec", "robertson"]:
-            # VFX PIPELINE: PERFECT FLAT LOG PROFILE - Research-based implementation
-            # This should look FLAT and DESATURATED - that's CORRECT for professional VFX!
+            # VFX PIPELINE: Raw linear radiance values
+            # IMPORTANT: The flat/desaturated appearance is CORRECT for professional VFX
+            # This is linear radiance data meant for compositing, not direct viewing
             
-            logger.info(f"  Processing VFX flat log profile - this will look flat/desaturated (CORRECT)")
+            logger.info(f"  Processing VFX linear radiance - flat appearance is CORRECT for compositing")
             
             # VFX STANDARD: Minimal scaling for professional flat log appearance
             if hdr_image.max() > 0:
@@ -154,13 +180,24 @@ class DebevecHDRProcessor:
         """
         Process multiple exposure images using various HDR algorithms
         
+        VFX PIPELINE NOTE:
+        - Debevec/Robertson expect 8-bit sRGB input (NOT linearized)
+        - They output linear radiance values (physical light intensity)
+        - The output will look flat/desaturated - this is CORRECT for VFX
+        
         Args:
-            images: List of 8-bit images (OpenCV format) - CRITICAL: Must be 8-bit for OpenCV HDR
-            exposure_times: List of exposure times in seconds  
-            algorithm: HDR algorithm to use ("mertens", "debevec", "robertson")
+            images: List of 8-bit sRGB images (0-255 range) - DO NOT pre-linearize!
+            exposure_times: List of exposure times in seconds
+            algorithm: HDR algorithm to use:
+                - "natural_blend": Preserves EV0 look with enhanced range
+                - "mertens": Exposure fusion (display-ready)
+                - "debevec": True HDR recovery (flat/linear for VFX)
+                - "robertson": Alternative HDR recovery (flat/linear for VFX)
             
         Returns:
-            HDR merged image in linear colorspace (float32)
+            HDR merged image in linear radiance space (float32)
+            - For Debevec/Robertson: Raw linear radiance (can exceed 1.0)
+            - For Mertens/Natural: Display-oriented fusion (0-1 range typical)
         """
         try:
             # Validate input format - OpenCV HDR functions require 8-bit input
@@ -169,18 +206,12 @@ class DebevecHDRProcessor:
                 if img.dtype != np.uint8:
                     logger.warning(f"Image {i} is not 8-bit (dtype: {img.dtype}), this may cause issues")
                 
-                # CRITICAL VFX COLOR FIX: Handle color channels properly
+                # Handle color channels properly
                 if len(img.shape) == 3 and img.shape[2] == 3:  # 3-channel image
-                    if algorithm in ["debevec", "robertson"]:
-                        # VFX PIPELINE COLOR FIX: ComfyUI tensors are RGB, OpenCV expects BGR
-                        # This is THE cause of color inversion in Debevec!
-                        img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-                        processed_images.append(img_bgr)
-                        logger.info(f"CRITICAL FIX: RGB->BGR conversion for {algorithm} (fixes color inversion)")
-                    else:
-                        # For Mertens and Natural Blend, keep RGB format
-                        processed_images.append(img)
-                        logger.info(f"Keeping RGB format for {algorithm}")
+                    # ComfyUI tensors are RGB, but OpenCV HDR functions work with BGR internally
+                    # Keep all algorithms consistent - use RGB throughout
+                    processed_images.append(img)
+                    logger.info(f"Processing RGB image for {algorithm}")
                 else:
                     logger.error(f"Image {i} has invalid shape: {img.shape}")
                     raise ValueError(f"Image must be 3-channel RGB, got shape: {img.shape}")
@@ -230,19 +261,20 @@ class DebevecHDRProcessor:
                 logger.info(f"Response function shape: {response.shape}")
                 
                 # Merge images into HDR using Debevec algorithm
+                # Debevec outputs linear radiance values (already in linear space)
                 hdr_radiance = self.merge_debevec.process(processed_images, times, response)
                 
                 logger.info(f"Debevec raw radiance range: [{hdr_radiance.min():.6f}, {hdr_radiance.max():.6f}]")
                 
-                # VFX PIPELINE: NO TONE MAPPING! Keep raw linear radiance for professional workflow
-                # This should look flat/log-like - that's correct for VFX
+                # VFX PIPELINE: The output is already in linear space (raw radiance values)
+                # Keep raw linear radiance for professional VFX workflow
                 # Only apply minimal scaling if needed for numerical stability
                 if hdr_radiance.max() > 1000.0:  # Only if extremely bright values
                     scale_factor = 100.0 / np.percentile(hdr_radiance, 99.5)
                     hdr_radiance = hdr_radiance * scale_factor
                     logger.info(f"Applied minimal scaling for numerical stability: {scale_factor:.3f}")
                 
-                logger.info(f"Debevec VFX output range: [{hdr_radiance.min():.6f}, {hdr_radiance.max():.6f}]")
+                logger.info(f"Debevec VFX output (linear radiance): [{hdr_radiance.min():.6f}, {hdr_radiance.max():.6f}]")
             
             # Validate HDR output
             if hdr_radiance is None or hdr_radiance.size == 0:
@@ -258,13 +290,8 @@ class DebevecHDRProcessor:
             if np.all(hdr_radiance == 0):
                 raise ValueError("HDR merge produced all-zero result")
             
-            # VFX PIPELINE COLOR FIX: Convert back to RGB for ComfyUI 
-            # Since we converted to BGR for processing, convert back to RGB for output
-            if len(hdr_radiance.shape) == 3 and hdr_radiance.shape[2] == 3 and algorithm in ["debevec", "robertson"]:
-                hdr_radiance = cv2.cvtColor(hdr_radiance.astype(np.float32), cv2.COLOR_BGR2RGB)
-                logger.info(f"CRITICAL FIX: BGR->RGB conversion for output (maintains color consistency)")
-            
-            # The result is in linear colorspace - preserve HDR data
+            # The result is already in linear colorspace - preserve HDR data
+            # No color conversion needed as we kept RGB throughout
             return hdr_radiance.astype(np.float32)
             
         except Exception as e:
@@ -436,7 +463,12 @@ class DebevecHDRProcessor:
 class LuminanceStackProcessor3Stops:
     """
     Professional ComfyUI Custom Node for 3-stop HDR processing
-    Processes EV+2, EV+0, EV-2 exposures using Debevec Algorithm
+    Processes EV+2, EV+0, EV-2 exposures using multiple algorithms
+    
+    VFX PIPELINE NOTE:
+    When using Debevec/Robertson algorithms, the output will be linear radiance
+    values that look flat/desaturated. This is the correct format for professional
+    VFX compositing and should be saved as 16-bit EXR.
     """
     
     @classmethod
@@ -483,15 +515,13 @@ class LuminanceStackProcessor3Stops:
             Tuple containing merged HDR image
         """
         try:
-            # VFX CRITICAL: Apply proper gamma correction for Debevec/Robertson
-            # This is ESSENTIAL for flat log profile and color accuracy
-            apply_gamma = hdr_algorithm in ["debevec", "robertson"]
-            img_plus_2 = tensor_to_cv2(ev_plus_2, apply_gamma_correction=apply_gamma)
-            img_0 = tensor_to_cv2(ev_0, apply_gamma_correction=apply_gamma)
-            img_minus_2 = tensor_to_cv2(ev_minus_2, apply_gamma_correction=apply_gamma)
+            # Convert tensors to 8-bit sRGB images (no gamma correction needed)
+            # Debevec/Robertson algorithms expect sRGB input and output linear radiance
+            img_plus_2 = tensor_to_cv2(ev_plus_2)
+            img_0 = tensor_to_cv2(ev_0)
+            img_minus_2 = tensor_to_cv2(ev_minus_2)
             
-            if apply_gamma:
-                logger.info("VFX PIPELINE: sRGB->Linear conversion applied - CRITICAL for flat log profile")
+            logger.info(f"Processing 3-stop HDR with {hdr_algorithm} algorithm")
             
             # Calculate exposure times based on EV values
             # EV difference formula: time = base_time * 2^(-EV_difference)
@@ -526,8 +556,13 @@ class LuminanceStackProcessor3Stops:
 
 class LuminanceStackProcessor5Stops:
     """
-    Professional ComfyUI Custom Node for 5-stop HDR processing  
-    Processes EV+4, EV+2, EV+0, EV-2, EV-4 exposures using Debevec Algorithm
+    Professional ComfyUI Custom Node for 5-stop HDR processing
+    Processes EV+4, EV+2, EV+0, EV-2, EV-4 exposures using multiple algorithms
+    
+    VFX PIPELINE NOTE:
+    When using Debevec/Robertson algorithms, the output will be linear radiance
+    values that look flat/desaturated. This is the correct format for professional
+    VFX compositing and should be saved as 16-bit EXR.
     """
     
     @classmethod
@@ -578,17 +613,15 @@ class LuminanceStackProcessor5Stops:
             Tuple containing merged HDR image
         """
         try:
-            # VFX CRITICAL: Apply proper gamma correction for Debevec/Robertson
-            # This is ESSENTIAL for flat log profile and color accuracy
-            apply_gamma = hdr_algorithm in ["debevec", "robertson"]
-            img_plus_4 = tensor_to_cv2(ev_plus_4, apply_gamma_correction=apply_gamma)
-            img_plus_2 = tensor_to_cv2(ev_plus_2, apply_gamma_correction=apply_gamma)
-            img_0 = tensor_to_cv2(ev_0, apply_gamma_correction=apply_gamma)
-            img_minus_2 = tensor_to_cv2(ev_minus_2, apply_gamma_correction=apply_gamma)
-            img_minus_4 = tensor_to_cv2(ev_minus_4, apply_gamma_correction=apply_gamma)
+            # Convert tensors to 8-bit sRGB images (no gamma correction needed)
+            # Debevec/Robertson algorithms expect sRGB input and output linear radiance
+            img_plus_4 = tensor_to_cv2(ev_plus_4)
+            img_plus_2 = tensor_to_cv2(ev_plus_2)
+            img_0 = tensor_to_cv2(ev_0)
+            img_minus_2 = tensor_to_cv2(ev_minus_2)
+            img_minus_4 = tensor_to_cv2(ev_minus_4)
             
-            if apply_gamma:
-                logger.info("VFX PIPELINE: sRGB->Linear conversion applied - CRITICAL for flat log profile")
+            logger.info(f"Processing 5-stop HDR with {hdr_algorithm} algorithm")
             
             # Calculate exposure times based on EV values
             base_time = 1.0 / 60.0  # 1/60s as base exposure
@@ -626,6 +659,11 @@ class HDRExportNode:
     """
     ComfyUI Custom Node for exporting HDR images to EXR format
     Preserves full dynamic range data without normalization
+    
+    VFX PIPELINE NOTE:
+    EXR files store linear radiance values (32-bit float per channel).
+    The flat/desaturated appearance of Debevec/Robertson output is correct.
+    Professional compositing software expects this linear format.
     """
     
     @classmethod
