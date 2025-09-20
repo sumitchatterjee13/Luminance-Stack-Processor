@@ -16,10 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **CRITICAL: Fixed color inversion issues** - Added proper BGR↔RGB conversion for correct color handling
-- **Fixed brightness problems** - Improved scaling and algorithm selection
+- **Fixed brightness problems** - Improved scaling and algorithm selection  
 - **Added Mertens Exposure Fusion algorithm** - Now default, produces better results like Adobe Lightroom
 - **Added Robertson algorithm** - Alternative HDR method for different use cases
 - **Enhanced algorithm selection** - Users can choose between Mertens (default), Debevec, and Robertson
+- **CRITICAL: Fixed Debevec algorithm issues** - Added Reinhard tone mapping to fix brightness/color inversion
+- **Improved Debevec output** - Now produces natural results similar to Mertens
+- **Enhanced per-algorithm scaling** - Different scaling strategies for different algorithms
 
 ## [1.0.1] - 2025-01-20
 

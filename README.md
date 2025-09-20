@@ -117,8 +117,9 @@ The nodes implement **multiple HDR algorithms** with **Mertens Exposure Fusion**
 
 #### **Debevec Algorithm (Classic HDR)**
 - **Industry standard**: Original HDR reconstruction method from 1997
-- **True scene radiance**: Recovers actual physical light values
-- **Research accurate**: Mathematically precise but may require tone mapping for display
+- **True scene radiance**: Recovers actual physical light values with automatic tone mapping
+- **Natural output**: Now includes Reinhard tone mapping for proper brightness and colors
+- **Research accurate**: Mathematically precise with practical usability improvements
 
 #### **Robertson Algorithm**
 - **Alternative approach**: Different camera response function estimation method
@@ -161,14 +162,15 @@ The nodes implement **multiple HDR algorithms** with **Mertens Exposure Fusion**
    - Restart ComfyUI completely
 
 2. **Color inversion or wrong colors**:
-   - Try switching to **Mertens algorithm** (default) - usually fixes color issues
-   - Mertens produces more natural colors similar to Adobe Lightroom
-   - Debevec/Robertson may need additional tone mapping for proper color appearance
+   - **Mertens algorithm** (default) - produces natural colors, no issues expected
+   - **Debevec algorithm** - now includes automatic Reinhard tone mapping for proper colors
+   - **Robertson algorithm** - also includes tone mapping for natural appearance
 
 3. **Image too bright or too dark**:
-   - **Mertens algorithm** (default) produces best brightness levels
+   - **All algorithms** now produce proper brightness levels automatically
+   - **Mertens** (default) - natural brightness similar to Adobe Lightroom
+   - **Debevec/Robertson** - include automatic Reinhard tone mapping for proper brightness
    - Output should look like enhanced EV0 with extended dynamic range
-   - For Debevec/Robertson, you may need tone mapping in post-processing
 
 4. **Poor HDR results**:
    - Ensure input images are properly exposed (not all over/under)

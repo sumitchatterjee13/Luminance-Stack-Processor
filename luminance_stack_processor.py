@@ -41,21 +41,26 @@ def tensor_to_cv2(tensor: torch.Tensor) -> np.ndarray:
     return image_8bit
 
 
-def cv2_to_tensor(hdr_image: np.ndarray, output_16bit_linear: bool = True) -> torch.Tensor:
+def cv2_to_tensor(hdr_image: np.ndarray, output_16bit_linear: bool = True, algorithm_hint: str = "unknown") -> torch.Tensor:
     """Convert OpenCV HDR image to ComfyUI tensor format"""
     
     if output_16bit_linear:
         # Convert HDR linear data to 16-bit linear format
         # Scale to 16-bit range while preserving linear characteristics
         
-        # Find a reasonable scaling factor based on HDR content
-        # Use 95th percentile to avoid extreme outliers affecting scaling
-        scale_reference = np.percentile(hdr_image, 95.0)
+        # Different scaling strategies based on algorithm
+        if algorithm_hint == "mertens":
+            # Mertens typically produces 0-2 range, use 90th percentile
+            scale_reference = np.percentile(hdr_image, 90.0)
+            target_scale = 0.8  # 80% of 16-bit range
+        else:
+            # Debevec/Robertson can have very wide ranges, use 95th percentile
+            scale_reference = np.percentile(hdr_image, 95.0)  
+            target_scale = 0.7  # 70% of 16-bit range for more headroom
         
         if scale_reference > 0:
-            # Scale so that the 95th percentile maps to ~80% of 16-bit range
-            # This preserves highlights while utilizing most of the 16-bit range
-            scale_factor = (0.8 * 65535.0) / scale_reference
+            # Scale so that the percentile maps to target % of 16-bit range
+            scale_factor = (target_scale * 65535.0) / scale_reference
             scaled_linear = hdr_image * scale_factor
         else:
             scaled_linear = hdr_image * 65535.0
@@ -66,8 +71,9 @@ def cv2_to_tensor(hdr_image: np.ndarray, output_16bit_linear: bool = True) -> to
         # Convert to ComfyUI tensor format (0-1 range) while preserving 16-bit precision
         normalized_16bit = hdr_16bit_linear / 65535.0
         
-        logger.info(f"HDR 16-bit linear output:")
+        logger.info(f"HDR 16-bit linear output ({algorithm_hint}):")
         logger.info(f"  Original range: [{hdr_image.min():.6f}, {hdr_image.max():.6f}]")
+        logger.info(f"  Scale reference ({90 if algorithm_hint == 'mertens' else 95}th percentile): {scale_reference:.6f}")
         logger.info(f"  16-bit range: [{hdr_16bit_linear.min():.1f}, {hdr_16bit_linear.max():.1f}]")
         logger.info(f"  Final range: [{normalized_16bit.min():.6f}, {normalized_16bit.max():.6f}]")
         logger.info(f"  Scale factor: {scale_factor:.2f}")
@@ -148,6 +154,8 @@ class DebevecHDRProcessor:
                 logger.info("Using Robertson algorithm...")
                 response = self.calibrator_robertson.process(processed_images, times)
                 hdr_radiance = self.merge_robertson.process(processed_images, times, response)
+                # Apply same tone mapping as Debevec
+                hdr_radiance = self._tone_map_debevec_output(hdr_radiance, "Robertson")
                 
             else:  # Default to Debevec
                 # Estimate camera response function using Debevec method
@@ -157,6 +165,8 @@ class DebevecHDRProcessor:
                 
                 # Merge images into HDR using Debevec algorithm
                 hdr_radiance = self.merge_debevec.process(processed_images, times, response)
+                # Apply tone mapping to fix brightness and make output similar to Mertens
+                hdr_radiance = self._tone_map_debevec_output(hdr_radiance, "Debevec")
             
             # Validate HDR output
             if hdr_radiance is None or hdr_radiance.size == 0:
@@ -177,8 +187,7 @@ class DebevecHDRProcessor:
             if len(hdr_radiance.shape) == 3 and hdr_radiance.shape[2] == 3:
                 hdr_radiance = cv2.cvtColor(hdr_radiance, cv2.COLOR_RGB2BGR)
             
-            # The result is already in linear colorspace (scene radiance values)
-            # Don't apply tone mapping - preserve the HDR data as-is
+            # The result is in linear colorspace - preserve HDR data
             return hdr_radiance.astype(np.float32)
             
         except Exception as e:
@@ -198,6 +207,50 @@ class DebevecHDRProcessor:
                 logger.info(f"Using fallback image (index {middle_idx})")
                 return fallback_linear.astype(np.float32)
             raise e
+
+    def _tone_map_debevec_output(self, hdr_image: np.ndarray, algorithm_name: str) -> np.ndarray:
+        """
+        Apply tone mapping to Debevec/Robertson output to fix brightness and color issues
+        
+        Args:
+            hdr_image: Raw HDR output from Debevec/Robertson
+            algorithm_name: Name of algorithm for logging
+            
+        Returns:
+            Tone-mapped HDR image with proper brightness and color balance
+        """
+        logger.info(f"{algorithm_name} raw output range: [{hdr_image.min():.6f}, {hdr_image.max():.6f}]")
+        
+        # Debevec often produces extremely bright values - apply gamma correction and scaling
+        try:
+            # Method 1: Reinhard tone mapping for natural results
+            # This is similar to what Lightroom/Photoshop do for HDR
+            reinhard = cv2.createTonemapReinhard(gamma=1.8, intensity=-1.0, light_adapt=0.8, color_adapt=0.0)
+            tone_mapped = reinhard.process(hdr_image.astype(np.float32))
+            
+            logger.info(f"{algorithm_name} after Reinhard tone mapping: [{tone_mapped.min():.6f}, {tone_mapped.max():.6f}]")
+            
+            # Ensure reasonable dynamic range
+            if tone_mapped.max() > 0:
+                # Scale to have similar range as Mertens (0-2 range typical)
+                max_val = np.percentile(tone_mapped, 98)  # Use 98th percentile
+                if max_val > 0:
+                    tone_mapped = tone_mapped * (2.0 / max_val)
+                    
+            # Clamp extreme values while preserving HDR range
+            tone_mapped = np.clip(tone_mapped, 0.0, 10.0)
+            
+            logger.info(f"{algorithm_name} final tone mapped range: [{tone_mapped.min():.6f}, {tone_mapped.max():.6f}]")
+            
+            return tone_mapped.astype(np.float32)
+            
+        except Exception as e:
+            logger.error(f"Tone mapping failed for {algorithm_name}: {e}")
+            # Fallback: simple normalization
+            if hdr_image.max() > 0:
+                normalized = hdr_image / np.percentile(hdr_image, 95)
+                return np.clip(normalized, 0.0, 5.0).astype(np.float32)
+            return hdr_image.astype(np.float32)
 
 
 class LuminanceStackProcessor3Stops:
@@ -272,7 +325,7 @@ class LuminanceStackProcessor3Stops:
             hdr_result = self.processor.process_hdr(images, times, algorithm=hdr_algorithm)
             
             # Convert back to tensor - output 16-bit linear data
-            output_tensor = cv2_to_tensor(hdr_result, output_16bit_linear=True)
+            output_tensor = cv2_to_tensor(hdr_result, output_16bit_linear=True, algorithm_hint=hdr_algorithm)
             
             return (output_tensor,)
             
@@ -361,7 +414,7 @@ class LuminanceStackProcessor5Stops:
             hdr_result = self.processor.process_hdr(images, times, algorithm=hdr_algorithm)
             
             # Convert back to tensor - output 16-bit linear data  
-            output_tensor = cv2_to_tensor(hdr_result, output_16bit_linear=True)
+            output_tensor = cv2_to_tensor(hdr_result, output_16bit_linear=True, algorithm_hint=hdr_algorithm)
             
             return (output_tensor,)
             
