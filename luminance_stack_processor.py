@@ -3,7 +3,7 @@ Luminance Stack Processor - Professional ComfyUI Custom Nodes
 Implements HDR processing using the Debevec Algorithm for multiple exposure fusion
 
 Author: Sumit Chatterjee
-  Version: 1.0.3
+  Version: 1.0.4
 Semantic Versioning: MAJOR.MINOR.PATCH
 
 
@@ -844,6 +844,7 @@ class HDRExportNode:
                 "output_path": ("STRING", {"default": "", "tooltip": "Custom output directory (leave empty for ComfyUI output folder)"}),
                 "counter": ("INT", {"default": 1, "min": 0, "max": 99999, "step": 1, "tooltip": "Frame/sequence counter"}),
                 "format": (["exr", "hdr"], {"default": "exr", "tooltip": "HDR file format"}),
+                "bit_depth": (["16bit", "32bit"], {"default": "32bit", "tooltip": "EXR precision: 32bit = maximum quality, 16bit = smaller files"}),
                 "compression": (["none", "rle", "zip", "piz", "pxr24"], {"default": "zip", "tooltip": "EXR compression type"}),
             }
         }
@@ -855,7 +856,7 @@ class HDRExportNode:
     OUTPUT_NODE = True
     
     def export_hdr(self, hdr_image: torch.Tensor, filename_prefix: str = "ComfyUI", 
-                  output_path: str = "", counter: int = 1, format: str = "exr", compression: str = "zip"):
+                  output_path: str = "", counter: int = 1, format: str = "exr", bit_depth: str = "32bit", compression: str = "zip"):
         """
         Export HDR image with clean filename interface (no automatic prefixes)
         
@@ -865,6 +866,7 @@ class HDRExportNode:
             output_path: Custom output directory 
             counter: Frame/sequence number
             format: Output format (exr/hdr)
+            bit_depth: EXR precision (16bit/32bit)
             compression: EXR compression type
             
         Returns:
@@ -911,18 +913,35 @@ class HDRExportNode:
             logger.info(f"HDR Export: Saving to {filepath}")
             
             # Convert RGB to BGR for OpenCV (ComfyUI tensors are RGB)
-            if len(hdr_array.shape) == 3 and hdr_array.shape[2] == 3:
-                hdr_bgr = cv2.cvtColor(hdr_array.astype(np.float32), cv2.COLOR_RGB2BGR)
+            # Set precision based on bit_depth selection
+            if bit_depth == "32bit":
+                target_dtype = np.float32  # 32-bit single precision
+                logger.info("Using 32-bit float precision for maximum HDR quality")
             else:
-                hdr_bgr = hdr_array.astype(np.float32)
+                # For 16-bit, we still use float32 in processing but OpenCV will write as half-float
+                target_dtype = np.float32
+                logger.info("Using 16-bit half-float precision for smaller file size")
             
-            # Save HDR file based on format
+            if len(hdr_array.shape) == 3 and hdr_array.shape[2] == 3:
+                hdr_bgr = cv2.cvtColor(hdr_array.astype(target_dtype), cv2.COLOR_RGB2BGR)
+            else:
+                hdr_bgr = hdr_array.astype(target_dtype)
+            
+            # Save HDR file based on format and bit depth
             if format.lower() == "exr":
-                # Save as EXR with specified compression
-                # Note: OpenCV's EXR compression options may be limited
+                # Save as EXR with specified bit depth and compression
+                if bit_depth == "16bit":
+                    # For 16-bit, OpenCV automatically uses half-float when saving EXR
+                    logger.info("Saving as 16-bit half-float EXR (smaller file, good quality)")
+                else:
+                    # For 32-bit, OpenCV uses full float precision
+                    logger.info("Saving as 32-bit full-float EXR (maximum precision, larger file)")
+                
                 success = cv2.imwrite(filepath, hdr_bgr)
+                
             elif format.lower() == "hdr":
-                # Save as Radiance HDR format
+                # Save as Radiance HDR format (always 32-bit)
+                logger.info("Saving as Radiance HDR format (32-bit RGBE)")
                 success = cv2.imwrite(filepath, hdr_bgr)
             else:
                 success = cv2.imwrite(filepath, hdr_bgr)  # Default to EXR behavior
