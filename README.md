@@ -31,6 +31,22 @@ Professional HDR (High Dynamic Range) processing nodes for ComfyUI featuring our
 - **ComfyUI-Style Interface**: Filename and path inputs like built-in save nodes
 - **HDR Verification**: Automatic checking that HDR data is preserved in exports
 
+## 🎨 Visual Results
+
+### HDR Processing Comparison
+
+See the dramatic difference our Radiance Fusion Algorithm makes in preserving detail across exposure ranges:
+
+#### Indoor Lighting Comparison
+![Bulb Comparison](images/Bulb.jpg)
+*Multiple exposure levels of the same scene showing enhanced dynamic range preservation*
+
+#### Outdoor Scene Comparison  
+![Outdoor Comparison](images/outdoor1.jpg)
+*Natural outdoor scene demonstrating HDR processing across different exposure values*
+
+These comparison strips demonstrate how our HDR processing maintains detail in both highlights and shadows that would be lost in single-exposure captures.
+
 ## 📋 Requirements
 
 - **Python 3.11+** *(Required for optimal performance)*
