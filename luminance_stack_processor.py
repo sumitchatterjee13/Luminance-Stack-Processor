@@ -624,7 +624,7 @@ class LuminanceStackProcessor3Stops:
                     "display": "number"
                 }),
                 "exposure_adjust": ("FLOAT", {
-                    "default": -1.0,
+                    "default": 1.0,
                     "min": -5.0,
                     "max": 5.0,
                     "step": 0.1
@@ -643,7 +643,7 @@ class LuminanceStackProcessor3Stops:
     def __init__(self):
         self.processor = DebevecHDRProcessor()
     
-    def process_3_stop_hdr(self, ev_plus_2, ev_0, ev_minus_2, exposure_step=2.0, exposure_adjust=-1.0, hdr_algorithm="radiance_fusion"):
+    def process_3_stop_hdr(self, ev_plus_2, ev_0, ev_minus_2, exposure_step=2.0, exposure_adjust=1.0, hdr_algorithm="radiance_fusion"):
         """
         Process 3-stop HDR merge
         
@@ -735,7 +735,7 @@ class LuminanceStackProcessor5Stops:
                     "display": "number"
                 }),
                 "exposure_adjust": ("FLOAT", {
-                    "default": -1.0,
+                    "default": 1.0,
                     "min": -5.0,
                     "max": 5.0,
                     "step": 0.1
@@ -754,7 +754,7 @@ class LuminanceStackProcessor5Stops:
     def __init__(self):
         self.processor = DebevecHDRProcessor()
     
-    def process_5_stop_hdr(self, ev_plus_4, ev_plus_2, ev_0, ev_minus_2, ev_minus_4, exposure_step=2.0, exposure_adjust=-1.0, hdr_algorithm="radiance_fusion"):
+    def process_5_stop_hdr(self, ev_plus_4, ev_plus_2, ev_0, ev_minus_2, ev_minus_4, exposure_step=2.0, exposure_adjust=1.0, hdr_algorithm="radiance_fusion"):
         """
         Process 5-stop HDR merge
         
