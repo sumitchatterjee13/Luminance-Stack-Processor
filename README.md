@@ -6,17 +6,17 @@
 [![ComfyUI](https://img.shields.io/badge/ComfyUI-compatible-orange.svg)](https://github.com/comfyanonymous/ComfyUI)
 [![GitHub](https://img.shields.io/badge/GitHub-Repository-black.svg)](https://github.com/sumitchatterjee13/Luminance-Stack-Processor)
 
-Professional HDR (High Dynamic Range) processing nodes for ComfyUI featuring our **revolutionary Radiance Fusion Algorithm** - a breakthrough in HDR processing that delivers superior results through innovative Nuke-inspired mathematical operations.
+Professional HDR (High Dynamic Range) processing nodes for ComfyUI featuring our **Radiance Fusion Algorithm** - a custom HDR processing method that delivers enhanced results through Nuke-inspired mathematical operations.
 
 **Version: 1.0.5** | **Release Date: 2025-01-21**
 
 ## 🎯 Features
 
-- **🚀 REVOLUTIONARY RADIANCE FUSION ALGORITHM**: Our flagship innovation - a breakthrough HDR algorithm developed in-house
+- **🚀 RADIANCE FUSION ALGORITHM**: Our custom HDR algorithm developed in-house
   - **Nuke-Inspired Mathematics**: Based on professional VFX pipeline operations (plus/average)
-  - **Superior HDR Preservation**: Maintains perfect dynamic range with natural appearance  
-  - **Industry-Leading Results**: Outperforms traditional HDR methods
-  - **Professional VFX Quality**: Perfect for film, TV, and high-end visual effects
+  - **Enhanced HDR Preservation**: Maintains excellent dynamic range with natural appearance  
+  - **Improved Results**: Provides quality improvements over traditional methods
+  - **Professional VFX Quality**: Suitable for film, TV, and visual effects work
 - **🆕 TRUE 32-bit EXR Export**: Professional bit-depth control with imageio integration
 - **🚨 TRUE HDR Values Above 1.0**: Proper HDR data preservation without normalization
 - **Legacy HDR Algorithms** *(Work in Progress)*:
@@ -78,7 +78,7 @@ Professional HDR (High Dynamic Range) processing nodes for ComfyUI featuring our
 
 ## 📁 ComfyUI Workflow
 
-A complete example workflow for ComfyUI is provided in the `/workflow` directory. This demonstrates the optimal setup for professional HDR processing using our Radiance Fusion algorithm.
+A complete example workflow for ComfyUI is provided in the `/workflow` directory. This demonstrates a good setup for HDR processing using our Radiance Fusion algorithm.
 
 ## 🎨 Usage
 
@@ -110,7 +110,7 @@ Perfect for standard HDR bracketing with 3 exposures:
 - `ev_minus_2`: Underexposed image (-2 EV)
 - `exposure_step`: (Optional) EV step size (default: 2.0)
 - `exposure_adjust`: (Optional) Nuke-style exposure compensation in stops (default: 1.0)
-- `hdr_algorithm`: Choose **"radiance_fusion"** (default - *our breakthrough algorithm*), "natural_blend", "mertens", "debevec", "robertson"
+- `hdr_algorithm`: Choose **"radiance_fusion"** (default - *our custom algorithm*), "natural_blend", "mertens", "debevec", "robertson"
 
 **Output:**
 - `hdr_image`: HDR tensor with values potentially above 1.0
@@ -139,7 +139,7 @@ For extended dynamic range with 5 exposures:
 - `ev_minus_4`: Underexposed image (-4 EV)
 - `exposure_step`: (Optional) EV step size (default: 2.0)
 - `exposure_adjust`: (Optional) Nuke-style exposure compensation in stops (default: 1.0)
-- `hdr_algorithm`: Choose **"radiance_fusion"** (default - *our breakthrough algorithm*), "natural_blend", "mertens", "debevec", "robertson"
+- `hdr_algorithm`: Choose **"radiance_fusion"** (default - *our custom algorithm*), "natural_blend", "mertens", "debevec", "robertson"
 
 **Output:**
 - `hdr_image`: HDR tensor with values potentially above 1.0
@@ -149,7 +149,7 @@ For extended dynamic range with 5 exposures:
 1. **Load Images**: Load your bracketed exposures (3 or 5 images)
 2. **Add Processing Node**: "Luminance Stack Processor (3/5 Stops)"
 3. **Connect Exposures**: Connect each EV image to corresponding input
-4. **Choose Algorithm**: Select HDR algorithm (**Radiance Fusion recommended - our breakthrough innovation**)
+4. **Choose Algorithm**: Select HDR algorithm (**Radiance Fusion recommended - our custom algorithm**)
 5. **Add Export Node**: "HDR Export to EXR" 
 6. **Connect HDR Output**: From processor to export node
 7. **Set Filename**: Enter desired filename prefix
@@ -158,23 +158,23 @@ For extended dynamic range with 5 exposures:
 
 ## 🔬 How It Works
 
-The nodes feature our **revolutionary Radiance Fusion Algorithm** as the default, plus legacy algorithms for compatibility:
+The nodes feature our **Radiance Fusion Algorithm** as the default, plus traditional algorithms for compatibility:
 
 1. **Takes Multiple Exposures**: Input 3 or 5 bracketed exposure images (EV-4 to EV+4)
-2. **Selects HDR Algorithm**: Choose **Radiance Fusion** (our breakthrough innovation) or legacy methods
+2. **Selects HDR Algorithm**: Choose **Radiance Fusion** (our custom algorithm) or traditional methods
 3. **Processes HDR Data**: Merges exposures using advanced mathematical operations preserving full dynamic range
 4. **Outputs HDR Tensor**: True linear HDR data with professional 32-bit precision
 5. **🚨 CRITICAL: Use HDR Export Node**: Exports professional 32-bit EXR files with preserved HDR values
 
 ### 🎯 **HDR Algorithm Options:**
 
-#### **🚀 Radiance Fusion (Default - Our Breakthrough Innovation)**  
-- **📈 HDR Range**: Unlimited dynamic range with perfect preservation
-- **🧮 Advanced Mathematics**: Nuke-inspired plus/average operations for superior results
+#### **🚀 Radiance Fusion (Default - Our Custom Algorithm)**  
+- **📈 HDR Range**: Wide dynamic range with good preservation
+- **🧮 Advanced Mathematics**: Nuke-inspired plus/average operations for enhanced results
 - **🎬 Professional Quality**: VFX-grade HDR processing with natural appearance
-- **⚡ Optimal Performance**: Perfectly balanced dynamic range and visual appeal
-- **🔬 In-House Development**: Our proprietary algorithm outperforming traditional methods
-- **💎 Industry-Leading**: Superior to standard HDR techniques in both quality and reliability
+- **⚡ Good Performance**: Well-balanced dynamic range and visual appeal
+- **🔬 In-House Development**: Our custom algorithm with improvements over traditional methods
+- **💎 Quality Focus**: Enhanced compared to standard HDR techniques
 
 ---
 
@@ -217,12 +217,12 @@ The nodes feature our **revolutionary Radiance Fusion Algorithm** as the default
 ### Algorithm Selection Guide:
 
 #### 🎬 **For VFX/Post-Production:**
-- **🚀 Radiance Fusion** (Recommended): Our revolutionary algorithm - perfect for all professional work
+- **🚀 Radiance Fusion** (Recommended): Our custom algorithm - good for professional work
 - **🔬 Debevec** *(Legacy)*: Traditional raw radiance method
 - **⚙️ Robertson** *(Legacy)*: Alternative traditional method
 
 #### 🎨 **For Photography/Display:**
-- **🚀 Radiance Fusion** (Recommended): Our breakthrough algorithm - superior in every way
+- **🚀 Radiance Fusion** (Recommended): Our custom algorithm - enhanced quality
 - **🌟 Natural Blend** *(Work in Progress)*: Being optimized for better results
 - **💫 Mertens** *(Work in Progress)*: Traditional method under improvement
 
@@ -232,7 +232,7 @@ The nodes feature our **revolutionary Radiance Fusion Algorithm** as the default
 
 ## ⚙️ Technical Details
 
-- **Primary Algorithm**: **Radiance Fusion** - Our proprietary breakthrough innovation
+- **Primary Algorithm**: **Radiance Fusion** - Our custom HDR processing method
 - **Legacy Algorithms**: Natural Blend, Mertens, Debevec, Robertson *(work in progress)*
 - **Input Format**: 8-bit ComfyUI IMAGE tensors (standard ComfyUI format)
 - **Output Format**: True 32-bit linear HDR with unlimited dynamic range
@@ -261,7 +261,7 @@ The nodes feature our **revolutionary Radiance Fusion Algorithm** as the default
    - Ensure input images are properly exposed (not all over/under)
    - Check that images are aligned (use tripod)  
    - Verify EV differences match your capture method
-   - **Recommended**: Use Radiance Fusion (our breakthrough algorithm) for best results
+   - **Recommended**: Use Radiance Fusion (our custom algorithm) for good results
    - **Legacy algorithms**: Available for compatibility but under active improvement
 
 5. **Memory issues**:
@@ -356,4 +356,4 @@ We welcome contributions! Please:
 
 ---
 
-**Happy HDR Processing with Radiance Fusion!** 🚀✨ | **Version 1.0.5** | **Featuring Our Breakthrough Innovation**
+**Happy HDR Processing with Radiance Fusion!** 🚀✨ | **Version 1.0.5** | **Featuring Our Custom Algorithm**
