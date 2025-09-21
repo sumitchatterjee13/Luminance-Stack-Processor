@@ -45,6 +45,10 @@ See the dramatic difference our Radiance Fusion Algorithm makes in preserving de
 ![Outdoor Comparison](images/outdoor1.jpg)
 *Natural outdoor scene demonstrating HDR processing across different exposure values*
 
+#### Highlight Clamping Reduction
+![Highlight Clamping Comparison](images/Reduce%20highlight%20clamping.jpg)
+*Demonstration of reduced highlight clamping - preserving bright details that would normally be lost*
+
 These comparison strips demonstrate how our HDR processing maintains detail in both highlights and shadows that would be lost in single-exposure captures.
 
 ## 📋 Requirements
@@ -95,6 +99,10 @@ These comparison strips demonstrate how our HDR processing maintains detail in b
 ## 📁 ComfyUI Workflow
 
 A complete example workflow for ComfyUI is provided in the `/workflow` directory. This demonstrates a good setup for HDR processing using our Radiance Fusion algorithm.
+
+### Example Workflow Setup
+![ComfyUI Workflow](images/Comfyui%20workflow.jpg)
+*Complete ComfyUI workflow showing proper HDR processing setup with our custom nodes*
 
 ## 🎨 AI-Generated HDR from Single Images
 
