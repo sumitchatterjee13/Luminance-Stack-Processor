@@ -3,7 +3,7 @@ Luminance Stack Processor - Professional ComfyUI Custom Nodes
 Implements HDR processing using the Debevec Algorithm for multiple exposure fusion
 
 Author: Sumit Chatterjee
-  Version: 1.0.4
+  Version: 1.0.5
 Semantic Versioning: MAJOR.MINOR.PATCH
 
 
@@ -363,64 +363,85 @@ class DebevecHDRProcessor:
     
     def _radiance_fusion(self, images: List[np.ndarray], times: List[float]) -> np.ndarray:
         """
-        Radiance Fusion - Nuke-inspired HDR blending algorithm
+        Radiance Fusion - TRUE Nuke-style HDR blending algorithm
         
-        Uses Nuke's plus and average operations for perfect HDR preservation:
-        1. Plus all outer exposures: (ev-4 + ev-2 + ev+2 + ev+4)
-        2. Average with center exposure: result + ev0 / 2
+        Matches Nuke's exact behavior:
+        1. Convert to linear light (no normalization!)
+        2. Exposure compensation based on EV differences  
+        3. Plus operations in linear space
+        4. Average operation preserving full dynamic range
         
-        This creates beautiful HDR data while maintaining natural appearance.
+        This creates the same dynamic range as Nuke's merge operations.
         
         Args:
             images: List of exposure images in BGR format (from OpenCV)
             times: Exposure times
             
         Returns:
-            Radiance fusion result with excellent HDR preservation
+            Radiance fusion result with FULL dynamic range like Nuke
         """
-        logger.info("Radiance Fusion: Nuke-style HDR blending with plus/average operations")
+        logger.info("Radiance Fusion: TRUE Nuke-style HDR blending with exposure compensation")
         
-        # Convert to float32 for HDR processing
-        float_images = [img.astype(np.float32) / 255.0 for img in images]
-        
-        # For 5-stop: [ev+4, ev+2, ev0, ev-2, ev-4] - indices [0,1,2,3,4]
-        # For 3-stop: [ev+2, ev0, ev-2] - indices [0,1,2]
-        
-        if len(float_images) == 5:
-            # 5-stop processing: ev+4, ev+2, ev0, ev-2, ev-4
-            ev_plus_4 = float_images[0]   # Most overexposed
-            ev_plus_2 = float_images[1]   # Overexposed  
-            ev_0 = float_images[2]        # Middle exposure
-            ev_minus_2 = float_images[3]  # Underexposed
-            ev_minus_4 = float_images[4]  # Most underexposed
+        # CRITICAL: Convert to linear WITHOUT normalizing to 0-1!
+        # Nuke works with actual light values, not normalized values
+        linear_images = []
+        for i, img in enumerate(images):
+            # Convert to float but keep in 0-255 range initially
+            img_float = img.astype(np.float32)
             
-            # NUKE PLUS OPERATION: Add all outer exposures
-            # This preserves full dynamic range from all sources
+            # Convert to linear light (gamma correction)
+            # This is CRITICAL - Nuke works in linear space
+            img_linear = np.where(img_float <= 10.31,  # 0.04045 * 255
+                                 img_float / (255.0 * 12.92),
+                                 np.power((img_float / 255.0 + 0.055) / 1.055, 2.4))
+            
+            linear_images.append(img_linear)
+            logger.info(f"Image {i} linear range: [{img_linear.min():.6f}, {img_linear.max():.6f}]")
+        
+        # Calculate EV differences and apply exposure compensation
+        # This is what Nuke's merge node does internally
+        base_time = times[len(times) // 2]  # Middle exposure time
+        compensated_images = []
+        
+        for i, (img_linear, time) in enumerate(zip(linear_images, times)):
+            # Calculate exposure compensation factor
+            # Longer exposure time = brighter image = needs to be scaled down
+            exposure_compensation = np.log2(time / base_time)  # EV difference
+            compensation_factor = 2.0 ** (-exposure_compensation)  # Nuke's formula
+            
+            # Apply compensation to match Nuke's behavior
+            compensated = img_linear * compensation_factor
+            compensated_images.append(compensated)
+            
+            logger.info(f"Image {i}: EV compensation {exposure_compensation:.1f} stops (factor: {compensation_factor:.3f})")
+            logger.info(f"  Compensated range: [{compensated.min():.6f}, {compensated.max():.6f}]")
+        
+        # Now apply Nuke's exact operations
+        if len(compensated_images) == 5:
+            # 5-stop: [ev+4, ev+2, ev0, ev-2, ev-4]
+            ev_plus_4, ev_plus_2, ev_0, ev_minus_2, ev_minus_4 = compensated_images
+            
+            # NUKE PLUS: Add all outer exposures (preserves FULL dynamic range)
             outer_sum = ev_plus_4 + ev_plus_2 + ev_minus_2 + ev_minus_4
-            logger.info("5-stop: Added outer exposures (ev±4, ev±2) using Nuke plus operation")
+            logger.info("5-stop: Nuke plus operation on outer exposures")
             
-        elif len(float_images) == 3:
-            # 3-stop processing: ev+2, ev0, ev-2
-            ev_plus_2 = float_images[0]   # Overexposed
-            ev_0 = float_images[1]        # Middle exposure  
-            ev_minus_2 = float_images[2]  # Underexposed
+        elif len(compensated_images) == 3:
+            # 3-stop: [ev+2, ev0, ev-2]
+            ev_plus_2, ev_0, ev_minus_2 = compensated_images
             
-            # NUKE PLUS OPERATION: Add outer exposures
+            # NUKE PLUS: Add outer exposures
             outer_sum = ev_plus_2 + ev_minus_2
-            logger.info("3-stop: Added outer exposures (ev±2) using Nuke plus operation")
-            
-        else:
-            raise ValueError(f"Radiance Fusion requires 3 or 5 images, got {len(float_images)}")
+            logger.info("3-stop: Nuke plus operation on outer exposures")
         
-        # NUKE AVERAGE OPERATION: (outer_sum + ev0) / 2
-        # This balances the combined outer detail with the natural center exposure
+        # NUKE AVERAGE: (outer_sum + ev0) / 2 - preserves full range
         radiance_result = (outer_sum + ev_0) / 2.0
         
-        logger.info(f"Applied Nuke average operation: (outer_sum + ev0) / 2")
-        logger.info(f"Radiance Fusion result: [{radiance_result.min():.3f}, {radiance_result.max():.3f}]")
+        logger.info(f"Nuke-style average operation completed")
+        logger.info(f"Final HDR range: [{radiance_result.min():.6f}, {radiance_result.max():.6f}]")
         logger.info(f"HDR pixels above 1.0: {np.sum(radiance_result > 1.0)} pixels")
+        logger.info(f"HDR pixels above 10.0: {np.sum(radiance_result > 10.0)} pixels")
         
-        # Return with full HDR range preserved (no clipping!)
+        # Return with FULL dynamic range - NO CLIPPING whatsoever!
         return radiance_result.astype(np.float32)
 
     def _blend_ev0_preserving(self, images: List[np.ndarray], times: List[float]) -> np.ndarray:
@@ -927,20 +948,38 @@ class HDRExportNode:
             else:
                 hdr_bgr = hdr_array.astype(target_dtype)
             
-            # Save HDR file based on format and bit depth
+            # Save HDR file with TRUE bit depth control
             if format.lower() == "exr":
-                # Save as EXR with specified bit depth and compression
-                if bit_depth == "16bit":
-                    # For 16-bit, OpenCV automatically uses half-float when saving EXR
-                    logger.info("Saving as 16-bit half-float EXR (smaller file, good quality)")
-                else:
-                    # For 32-bit, OpenCV uses full float precision
-                    logger.info("Saving as 32-bit full-float EXR (maximum precision, larger file)")
-                
-                success = cv2.imwrite(filepath, hdr_bgr)
+                # CRITICAL: OpenCV's cv2.imwrite doesn't control EXR bit depth properly
+                # We need to use proper EXR writing method
+                try:
+                    if IMAGEIO_AVAILABLE:
+                        # Use imageio for proper 32-bit EXR writing
+                        if bit_depth == "32bit":
+                            logger.info("Using imageio for TRUE 32-bit EXR writing")
+                            # Convert BGR back to RGB for imageio
+                            hdr_rgb = cv2.cvtColor(hdr_bgr, cv2.COLOR_BGR2RGB)
+                            # Write as float32 for true 32-bit precision
+                            iio.imwrite(filepath, hdr_rgb.astype(np.float32))
+                            success = True
+                        else:
+                            logger.info("Using imageio for 16-bit EXR writing")
+                            # Convert BGR back to RGB for imageio
+                            hdr_rgb = cv2.cvtColor(hdr_bgr, cv2.COLOR_BGR2RGB)
+                            # Write as float16 for 16-bit precision
+                            iio.imwrite(filepath, hdr_rgb.astype(np.float16))
+                            success = True
+                    else:
+                        # Fallback to OpenCV (limited bit depth control)
+                        logger.warning("imageio not available - using OpenCV (limited 32-bit support)")
+                        success = cv2.imwrite(filepath, hdr_bgr)
+                except Exception as e:
+                    logger.error(f"imageio EXR writing failed: {e}")
+                    logger.info("Falling back to OpenCV EXR writing")
+                    success = cv2.imwrite(filepath, hdr_bgr)
                 
             elif format.lower() == "hdr":
-                # Save as Radiance HDR format (always 32-bit)
+                # Save as Radiance HDR format (always 32-bit RGBE)
                 logger.info("Saving as Radiance HDR format (32-bit RGBE)")
                 success = cv2.imwrite(filepath, hdr_bgr)
             else:

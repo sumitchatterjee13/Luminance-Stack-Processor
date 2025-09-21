@@ -2,13 +2,13 @@
 Version information for Luminance Stack Processor
 """
 
-__version__ = "1.0.4"
-__version_info__ = (1, 0, 4)
+__version__ = "1.0.5"
+__version_info__ = (1, 0, 5)
 
 # Semantic versioning components
 MAJOR = 1
 MINOR = 0
-PATCH = 4
+PATCH = 5
 
 # Build metadata
 BUILD_DATE = "2025-01-20"
