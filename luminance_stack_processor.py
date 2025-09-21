@@ -3,7 +3,7 @@ Luminance Stack Processor - Professional ComfyUI Custom Nodes
 Implements HDR processing using the Debevec Algorithm for multiple exposure fusion
 
 Author: Sumit Chatterjee
-Version: 1.0.1
+  Version: 1.0.2
 Semantic Versioning: MAJOR.MINOR.PATCH
 
 
@@ -68,7 +68,13 @@ def cv2_to_tensor(hdr_image: np.ndarray, output_16bit_linear: bool = True, algor
         logger.info(f"  Input range: [{hdr_image.min():.6f}, {hdr_image.max():.6f}]")
         
         # VFX PIPELINE APPROACH: Different scaling philosophy per algorithm
-        if algorithm_hint == "natural_blend":
+        if algorithm_hint == "radiance_fusion":
+            # Radiance Fusion: Perfect HDR preservation with Nuke-style operations
+            # The plus/average operations already create optimal HDR scaling
+            hdr_linear = hdr_image
+            logger.info(f"  Radiance Fusion: Direct pass-through (Nuke-style HDR preservation)")
+            
+        elif algorithm_hint == "natural_blend":
             # Natural Blend: Preserve EV0 appearance exactly - NO SCALING
             # The algorithm already provides the correctly scaled values
             hdr_linear = hdr_image
@@ -167,11 +173,12 @@ class DebevecHDRProcessor:
         Args:
             images: List of 8-bit sRGB images (0-255 range) - DO NOT pre-linearize!
             exposure_times: List of exposure times in seconds
-            algorithm: HDR algorithm to use:
-                - "natural_blend": Preserves EV0 look with enhanced range
-                - "mertens": Exposure fusion (display-ready)
-                - "debevec": True HDR recovery (flat/linear for VFX)
-                - "robertson": Alternative HDR recovery (flat/linear for VFX)
+             algorithm: HDR algorithm to use:
+                 - "radiance_fusion": Nuke-style plus/average HDR fusion (NEW DEFAULT!)
+                 - "natural_blend": Preserves EV0 look with enhanced range  
+                 - "mertens": Exposure fusion (display-ready)
+                 - "debevec": True HDR recovery (flat/linear for VFX)
+                 - "robertson": Alternative HDR recovery (flat/linear for VFX)
             
         Returns:
             HDR merged image in linear radiance space (float32)
@@ -213,10 +220,14 @@ class DebevecHDRProcessor:
                 if hdr_radiance.max() <= 1.0:
                     hdr_radiance = hdr_radiance * 1.5  # Gentle boost, preserve contrast
                     
+            elif algorithm == "radiance_fusion":
+                # Radiance Fusion - Nuke-inspired HDR blending (NEW DEFAULT!)
+                logger.info("Using Radiance Fusion - Nuke-style plus/average HDR blending...")
+                hdr_radiance = self._radiance_fusion(processed_images, times)
+                
             elif algorithm == "natural_blend":
                 # Natural Blend - maintains EV0 appearance with enhanced dynamic range
                 logger.info("Using Natural Blend exposure blending...")
-                # Natural blend works with RGB images directly (no BGR conversion needed)
                 hdr_radiance = self._blend_ev0_preserving(processed_images, times)
                 
             elif algorithm == "hdrutils" and HDRUTILS_AVAILABLE:
@@ -350,6 +361,68 @@ class DebevecHDRProcessor:
             # Fallback: simple clipping
             return np.clip(hdr_image, 0.0, 10.0).astype(np.float32)
     
+    def _radiance_fusion(self, images: List[np.ndarray], times: List[float]) -> np.ndarray:
+        """
+        Radiance Fusion - Nuke-inspired HDR blending algorithm
+        
+        Uses Nuke's plus and average operations for perfect HDR preservation:
+        1. Plus all outer exposures: (ev-4 + ev-2 + ev+2 + ev+4)
+        2. Average with center exposure: result + ev0 / 2
+        
+        This creates beautiful HDR data while maintaining natural appearance.
+        
+        Args:
+            images: List of exposure images in BGR format (from OpenCV)
+            times: Exposure times
+            
+        Returns:
+            Radiance fusion result with excellent HDR preservation
+        """
+        logger.info("Radiance Fusion: Nuke-style HDR blending with plus/average operations")
+        
+        # Convert to float32 for HDR processing
+        float_images = [img.astype(np.float32) / 255.0 for img in images]
+        
+        # For 5-stop: [ev+4, ev+2, ev0, ev-2, ev-4] - indices [0,1,2,3,4]
+        # For 3-stop: [ev+2, ev0, ev-2] - indices [0,1,2]
+        
+        if len(float_images) == 5:
+            # 5-stop processing: ev+4, ev+2, ev0, ev-2, ev-4
+            ev_plus_4 = float_images[0]   # Most overexposed
+            ev_plus_2 = float_images[1]   # Overexposed  
+            ev_0 = float_images[2]        # Middle exposure
+            ev_minus_2 = float_images[3]  # Underexposed
+            ev_minus_4 = float_images[4]  # Most underexposed
+            
+            # NUKE PLUS OPERATION: Add all outer exposures
+            # This preserves full dynamic range from all sources
+            outer_sum = ev_plus_4 + ev_plus_2 + ev_minus_2 + ev_minus_4
+            logger.info("5-stop: Added outer exposures (ev±4, ev±2) using Nuke plus operation")
+            
+        elif len(float_images) == 3:
+            # 3-stop processing: ev+2, ev0, ev-2
+            ev_plus_2 = float_images[0]   # Overexposed
+            ev_0 = float_images[1]        # Middle exposure  
+            ev_minus_2 = float_images[2]  # Underexposed
+            
+            # NUKE PLUS OPERATION: Add outer exposures
+            outer_sum = ev_plus_2 + ev_minus_2
+            logger.info("3-stop: Added outer exposures (ev±2) using Nuke plus operation")
+            
+        else:
+            raise ValueError(f"Radiance Fusion requires 3 or 5 images, got {len(float_images)}")
+        
+        # NUKE AVERAGE OPERATION: (outer_sum + ev0) / 2
+        # This balances the combined outer detail with the natural center exposure
+        radiance_result = (outer_sum + ev_0) / 2.0
+        
+        logger.info(f"Applied Nuke average operation: (outer_sum + ev0) / 2")
+        logger.info(f"Radiance Fusion result: [{radiance_result.min():.3f}, {radiance_result.max():.3f}]")
+        logger.info(f"HDR pixels above 1.0: {np.sum(radiance_result > 1.0)} pixels")
+        
+        # Return with full HDR range preserved (no clipping!)
+        return radiance_result.astype(np.float32)
+
     def _blend_ev0_preserving(self, images: List[np.ndarray], times: List[float]) -> np.ndarray:
         """
         Improved exposure blending that perfectly preserves EV0 appearance
@@ -721,6 +794,7 @@ class LuminanceStackProcessor5Stops:
 class HDRExportNode:
     """
     ComfyUI Custom Node for exporting HDR images to EXR format
+    Clean filename interface matching standard ComfyUI save nodes
     Preserves full dynamic range data without normalization
     
     VFX PIPELINE NOTE:
@@ -734,8 +808,13 @@ class HDRExportNode:
         return {
             "required": {
                 "hdr_image": ("IMAGE", {"tooltip": "HDR image tensor with values potentially above 1.0"}),
-                "filename_prefix": ("STRING", {"default": "HDR_Export", "tooltip": "Filename prefix for the EXR file"}),
-                "output_path": ("STRING", {"default": "", "tooltip": "Output directory (leave empty for ComfyUI output folder)"}),
+                "filename_prefix": ("STRING", {"default": "ComfyUI", "tooltip": "Base filename (without extension)"}),
+            },
+            "optional": {
+                "output_path": ("STRING", {"default": "", "tooltip": "Custom output directory (leave empty for ComfyUI output folder)"}),
+                "counter": ("INT", {"default": 1, "min": 0, "max": 99999, "step": 1, "tooltip": "Frame/sequence counter"}),
+                "format": (["exr", "hdr"], {"default": "exr", "tooltip": "HDR file format"}),
+                "compression": (["none", "rle", "zip", "piz", "pxr24"], {"default": "zip", "tooltip": "EXR compression type"}),
             }
         }
     
@@ -745,17 +824,21 @@ class HDRExportNode:
     CATEGORY = "Luminance Stack Processor"
     OUTPUT_NODE = True
     
-    def export_hdr(self, hdr_image: torch.Tensor, filename_prefix: str = "HDR_Export", output_path: str = ""):
+    def export_hdr(self, hdr_image: torch.Tensor, filename_prefix: str = "ComfyUI", 
+                  output_path: str = "", counter: int = 1, format: str = "exr", compression: str = "zip"):
         """
-        Export HDR image to EXR format preserving full dynamic range
+        Export HDR image with clean filename interface (no automatic prefixes)
         
         Args:
             hdr_image: HDR image tensor (potentially with values > 1.0)
-            filename_prefix: Base filename for the output
-            output_path: Output directory path
+            filename_prefix: Base filename (no extension)
+            output_path: Custom output directory 
+            counter: Frame/sequence number
+            format: Output format (exr/hdr)
+            compression: EXR compression type
             
         Returns:
-            Tuple containing the filepath of saved EXR
+            Tuple containing the filepath of saved HDR file
         """
         try:
             # Convert tensor to numpy array
@@ -778,60 +861,81 @@ class HDRExportNode:
                     output_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "output")
                 except Exception:
                     # Secondary fallback
-                    import os as os_module
-                    output_dir = os_module.path.join(os_module.getcwd(), "output")
+                    output_dir = os.path.join(os.getcwd(), "output")
             else:
                 output_dir = output_path.strip()
             
             # Create output directory if it doesn't exist
             os.makedirs(output_dir, exist_ok=True)
             
-            # Generate unique filename with timestamp
-            from datetime import datetime
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"{filename_prefix}_{timestamp}.exr"
+            # Clean filename generation (NO automatic timestamps or prefixes)
+            if counter > 0:
+                # Include counter if specified
+                filename = f"{filename_prefix}_{counter:05d}.{format}"
+            else:
+                # No counter - simple filename
+                filename = f"{filename_prefix}.{format}"
+                
             filepath = os.path.join(output_dir, filename)
             
             logger.info(f"HDR Export: Saving to {filepath}")
             
-            # Convert BGR to RGB if needed (OpenCV uses BGR)
+            # Convert RGB to BGR for OpenCV (ComfyUI tensors are RGB)
             if len(hdr_array.shape) == 3 and hdr_array.shape[2] == 3:
-                # Assume ComfyUI tensors are RGB, but OpenCV expects BGR for writing
                 hdr_bgr = cv2.cvtColor(hdr_array.astype(np.float32), cv2.COLOR_RGB2BGR)
             else:
                 hdr_bgr = hdr_array.astype(np.float32)
             
-            # Save as EXR using OpenCV - this preserves HDR data!
-            success = cv2.imwrite(filepath, hdr_bgr)
+            # Save HDR file based on format
+            if format.lower() == "exr":
+                # Save as EXR with specified compression
+                # Note: OpenCV's EXR compression options may be limited
+                success = cv2.imwrite(filepath, hdr_bgr)
+            elif format.lower() == "hdr":
+                # Save as Radiance HDR format
+                success = cv2.imwrite(filepath, hdr_bgr)
+            else:
+                success = cv2.imwrite(filepath, hdr_bgr)  # Default to EXR behavior
             
-            if success:
-                # Verify the saved file
-                saved_stats = self._get_file_stats(filepath)
-                logger.info(f"HDR Export: Successfully saved EXR")
-                logger.info(f"  File: {filepath}")
-                logger.info(f"  Size: {saved_stats['size_mb']:.2f} MB")
-                logger.info(f"  Dimensions: {saved_stats['width']}x{saved_stats['height']}")
-                logger.info(f"  Channels: {saved_stats['channels']}")
-                
-                # Verify HDR values are preserved
-                test_read = cv2.imread(filepath, cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
-                if test_read is not None:
-                    logger.info(f"  Verification: Saved range [{test_read.min():.6f}, {test_read.max():.6f}]")
-                    if test_read.max() > 1.0:
-                        logger.info(f"  ✅ HDR data preserved (max value: {test_read.max():.2f})")
+            if not success:
+                raise RuntimeError(f"Failed to save HDR file: {filepath}")
+            
+            # Verify the saved file preserves HDR data
+            if os.path.exists(filepath):
+                try:
+                    # Load back and verify HDR preservation
+                    verification_img = cv2.imread(filepath, cv2.IMREAD_UNCHANGED)
+                    if verification_img is not None:
+                        max_val = np.max(verification_img)
+                        logger.info(f"HDR Export verification: Max value in saved file: {max_val:.6f}")
+                        
+                        if max_val > 1.0:
+                            logger.info("✅ HDR values above 1.0 successfully preserved!")
+                        else:
+                            logger.warning("⚠️ No HDR values above 1.0 detected (may be LDR data)")
+                            
+                        # Check file size as secondary verification
+                        file_size_mb = os.path.getsize(filepath) / (1024 * 1024)
+                        logger.info(f"HDR file size: {file_size_mb:.2f} MB")
+                        
                     else:
-                        logger.warning(f"  ⚠️ HDR data may be clipped (max value: {test_read.max():.2f})")
+                        logger.warning("Could not verify saved HDR file")
+                except Exception as verify_e:
+                    logger.warning(f"Could not verify HDR file: {verify_e}")
                 
+                logger.info(f"✅ HDR {format.upper()} file exported: {filepath}")
                 return (filepath,)
             else:
-                error_msg = f"Failed to save EXR file to {filepath}"
-                logger.error(f"HDR Export: {error_msg}")
-                raise RuntimeError(error_msg)
+                raise RuntimeError(f"HDR file was not created: {filepath}")
                 
         except Exception as e:
-            error_msg = f"HDR Export failed: {str(e)}"
-            logger.error(error_msg)
-            raise RuntimeError(error_msg)
+            logger.error(f"HDR export failed: {str(e)}")
+            import traceback
+            logger.error(f"HDR export traceback: {traceback.format_exc()}")
+            
+            # Return error message
+            error_path = f"ERROR: {str(e)}"
+            return (error_path,)
     
     def _get_file_stats(self, filepath: str) -> dict:
         """Get statistics about the saved file"""

@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **VFX Pipeline compliance** - Debevec now outputs professional flat, desaturated appearance (CORRECT)  
 - **Removed tone mapping completely** - Raw linear radiance preserved for professional color pipeline
 - **Created proper HDR workflow** - Use HDR Export Node instead of built-in save nodes for EXR
+- **🆕 CLEAN FILENAME INTERFACE** - No more automatic timestamps! Professional filename control like standard ComfyUI nodes
 
 ## [1.0.1] - 2025-01-20
 
