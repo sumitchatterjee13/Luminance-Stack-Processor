@@ -623,13 +623,11 @@ class LuminanceStackProcessor3Stops:
                     "step": 0.1,
                     "display": "number"
                 }),
-                "exposure_compensation": ("FLOAT", {
+                "exposure_adjust": ("FLOAT", {
                     "default": -1.0,
                     "min": -5.0,
                     "max": 5.0,
-                    "step": 0.1,
-                    "display": "number",
-                    "tooltip": "Adjust final exposure (stops): -1.0 = half brightness, +1.0 = double brightness"
+                    "step": 0.1
                 }),
                 "hdr_algorithm": (["radiance_fusion", "natural_blend", "mertens", "debevec", "robertson"] + (["hdrutils"] if HDRUTILS_AVAILABLE else []), {
                     "default": "radiance_fusion"
@@ -645,7 +643,7 @@ class LuminanceStackProcessor3Stops:
     def __init__(self):
         self.processor = DebevecHDRProcessor()
     
-    def process_3_stop_hdr(self, ev_plus_2, ev_0, ev_minus_2, exposure_step=2.0, exposure_compensation=-1.0, hdr_algorithm="radiance_fusion"):
+    def process_3_stop_hdr(self, ev_plus_2, ev_0, ev_minus_2, exposure_step=2.0, exposure_adjust=-1.0, hdr_algorithm="radiance_fusion"):
         """
         Process 3-stop HDR merge
         
@@ -654,10 +652,10 @@ class LuminanceStackProcessor3Stops:
             ev_0: Normal exposure image (0 EV)
             ev_minus_2: Underexposed image (-2 EV)
             exposure_step: EV step size
-            exposure_compensation: Final exposure adjustment in stops (Nuke-style)
+            exposure_adjust: Final exposure adjustment in stops (Nuke-style)
             
         Returns:
-            Tuple containing merged HDR image with exposure compensation applied
+            Tuple containing merged HDR image with exposure adjustment applied
         """
         try:
             # Convert tensors to 8-bit sRGB images (no gamma correction needed)
@@ -686,13 +684,13 @@ class LuminanceStackProcessor3Stops:
             
             logger.info(f"3-Stop HDR result range before tensor conversion: [{hdr_result.min():.6f}, {hdr_result.max():.6f}]")
             
-            # Apply exposure compensation (Nuke-style)
-            if exposure_compensation != 0.0:
-                # Standard exposure formula: result * (2^(-exposure_compensation))
-                compensation_factor = 2.0 ** (-exposure_compensation)
-                hdr_result = hdr_result * compensation_factor
-                logger.info(f"Applied exposure compensation: {exposure_compensation:+.1f} stops (factor: {compensation_factor:.3f})")
-                logger.info(f"HDR result after compensation: [{hdr_result.min():.6f}, {hdr_result.max():.6f}]")
+            # Apply exposure adjustment (Nuke-style)
+            if exposure_adjust != 0.0:
+                # Standard exposure formula: result * (2^(-exposure_adjust))
+                adjustment_factor = 2.0 ** (-exposure_adjust)
+                hdr_result = hdr_result * adjustment_factor
+                logger.info(f"Applied exposure adjustment: {exposure_adjust:+.1f} stops (factor: {adjustment_factor:.3f})")
+                logger.info(f"HDR result after adjustment: [{hdr_result.min():.6f}, {hdr_result.max():.6f}]")
             
             # Convert back to tensor with TRUE HDR values (above 1.0)
             output_tensor = cv2_to_tensor(hdr_result, output_16bit_linear=True, algorithm_hint=hdr_algorithm)
@@ -736,13 +734,11 @@ class LuminanceStackProcessor5Stops:
                     "step": 0.1,
                     "display": "number"
                 }),
-                "exposure_compensation": ("FLOAT", {
+                "exposure_adjust": ("FLOAT", {
                     "default": -1.0,
                     "min": -5.0,
                     "max": 5.0,
-                    "step": 0.1,
-                    "display": "number",
-                    "tooltip": "Adjust final exposure (stops): -1.0 = half brightness, +1.0 = double brightness"
+                    "step": 0.1
                 }),
                 "hdr_algorithm": (["radiance_fusion", "natural_blend", "mertens", "debevec", "robertson"] + (["hdrutils"] if HDRUTILS_AVAILABLE else []), {
                     "default": "radiance_fusion"
@@ -758,7 +754,7 @@ class LuminanceStackProcessor5Stops:
     def __init__(self):
         self.processor = DebevecHDRProcessor()
     
-    def process_5_stop_hdr(self, ev_plus_4, ev_plus_2, ev_0, ev_minus_2, ev_minus_4, exposure_step=2.0, exposure_compensation=-1.0, hdr_algorithm="radiance_fusion"):
+    def process_5_stop_hdr(self, ev_plus_4, ev_plus_2, ev_0, ev_minus_2, ev_minus_4, exposure_step=2.0, exposure_adjust=-1.0, hdr_algorithm="radiance_fusion"):
         """
         Process 5-stop HDR merge
         
@@ -769,10 +765,10 @@ class LuminanceStackProcessor5Stops:
             ev_minus_2: Underexposed image (-2 EV)
             ev_minus_4: Most underexposed image (-4 EV)
             exposure_step: EV step size
-            exposure_compensation: Final exposure adjustment in stops (Nuke-style)
+            exposure_adjust: Final exposure adjustment in stops (Nuke-style)
             
         Returns:
-            Tuple containing merged HDR image with exposure compensation applied
+            Tuple containing merged HDR image with exposure adjustment applied
         """
         try:
             # Convert tensors to 8-bit sRGB images (no gamma correction needed)
@@ -804,13 +800,13 @@ class LuminanceStackProcessor5Stops:
             
             logger.info(f"5-Stop HDR result range before tensor conversion: [{hdr_result.min():.6f}, {hdr_result.max():.6f}]")
             
-            # Apply exposure compensation (Nuke-style)
-            if exposure_compensation != 0.0:
-                # Standard exposure formula: result * (2^(-exposure_compensation))
-                compensation_factor = 2.0 ** (-exposure_compensation)
-                hdr_result = hdr_result * compensation_factor
-                logger.info(f"Applied exposure compensation: {exposure_compensation:+.1f} stops (factor: {compensation_factor:.3f})")
-                logger.info(f"HDR result after compensation: [{hdr_result.min():.6f}, {hdr_result.max():.6f}]")
+            # Apply exposure adjustment (Nuke-style)
+            if exposure_adjust != 0.0:
+                # Standard exposure formula: result * (2^(-exposure_adjust))
+                adjustment_factor = 2.0 ** (-exposure_adjust)
+                hdr_result = hdr_result * adjustment_factor
+                logger.info(f"Applied exposure adjustment: {exposure_adjust:+.1f} stops (factor: {adjustment_factor:.3f})")
+                logger.info(f"HDR result after adjustment: [{hdr_result.min():.6f}, {hdr_result.max():.6f}]")
             
             # Convert back to tensor with TRUE HDR values (above 1.0)
             output_tensor = cv2_to_tensor(hdr_result, output_16bit_linear=True, algorithm_hint=hdr_algorithm)
