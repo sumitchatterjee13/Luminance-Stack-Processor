@@ -623,8 +623,8 @@ class LuminanceStackProcessor3Stops:
                     "step": 0.1,
                     "display": "number"
                 }),
-                "hdr_algorithm": (["natural_blend", "mertens", "debevec", "robertson"] + (["hdrutils"] if HDRUTILS_AVAILABLE else []), {
-                    "default": "natural_blend"
+                "hdr_algorithm": (["radiance_fusion", "natural_blend", "mertens", "debevec", "robertson"] + (["hdrutils"] if HDRUTILS_AVAILABLE else []), {
+                    "default": "radiance_fusion"
                 }),
             }
         }
@@ -719,8 +719,8 @@ class LuminanceStackProcessor5Stops:
                     "step": 0.1,
                     "display": "number"
                 }),
-                "hdr_algorithm": (["natural_blend", "mertens", "debevec", "robertson"] + (["hdrutils"] if HDRUTILS_AVAILABLE else []), {
-                    "default": "natural_blend"
+                "hdr_algorithm": (["radiance_fusion", "natural_blend", "mertens", "debevec", "robertson"] + (["hdrutils"] if HDRUTILS_AVAILABLE else []), {
+                    "default": "radiance_fusion"
                 }),
             }
         }
