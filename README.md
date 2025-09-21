@@ -80,6 +80,34 @@ Professional HDR (High Dynamic Range) processing nodes for ComfyUI featuring our
 
 A complete example workflow for ComfyUI is provided in the `/workflow` directory. This demonstrates a good setup for HDR processing using our Radiance Fusion algorithm.
 
+## 🎨 AI-Generated HDR from Single Images
+
+We've developed a complete workflow for creating HDR images from a single source image using **FLUX.1 Kontext exposure control LoRAs**:
+
+### 🚀 **The Complete Pipeline:**
+
+1. **Start with any image** - Generated from any model or captured photo
+2. **Generate exposure variants** - Use our trained LoRAs to create EV-4, EV-2, EV0, EV+2, EV+4 versions
+3. **Process with Radiance Fusion** - Feed the synthetic exposures into our HDR nodes
+4. **Get professional HDR** - Output true 32-bit HDR images with enhanced dynamic range
+
+### 📦 **Exposure Control LoRAs:**
+
+Our custom-trained LoRAs for **FLUX.1 Kontext (dev)** can generate different exposure levels from a single image:
+
+- **Available LoRAs**: `ev-4`, `ev-2`, `ev+2`, `ev+4` (with corresponding trigger words)
+- **Easy to use**: Simply add the trigger word and adjust LoRA weight  
+- **High quality**: Trained specifically for exposure control
+- **Download**: [Flux-Kontext-exposure-control-LoRAs](https://huggingface.co/Sumitc13/Flux-Kontext-exposure-control-LoRAs)
+
+### 💡 **Workflow Benefits:**
+
+- ✅ **Single image input** - No need for multiple captures or bracketing
+- ✅ **AI-generated exposures** - Perfect synthetic exposure variants
+- ✅ **Professional HDR output** - True HDR with our Radiance Fusion processing
+- ✅ **Complete automation** - Generate and process in one workflow
+- ✅ **Creative freedom** - Work with any generated or captured image
+
 ## 🎨 Usage
 
 ### 🚨 **CRITICAL: Proper HDR Workflow**
@@ -202,17 +230,33 @@ The nodes feature our **Radiance Fusion Algorithm** as the default, plus traditi
 
 ## 📸 Best Practices
 
-### For Capturing Source Images:
+### For Capturing Source Images (Traditional Method):
 - Use a **tripod** for perfect alignment
 - Keep the **same white balance** across all exposures
 - Use **manual focus** to prevent focus shifts
 - Capture in **RAW format** when possible
 - Use **exposure compensation** or **manual mode**
 
+### For AI-Generated Exposures (Modern Workflow):
+- Start with **any single image** (generated or captured)
+- Use our **FLUX.1 Kontext LoRAs** to create exposure variants
+- Download LoRAs: [Flux-Kontext-exposure-control-LoRAs](https://huggingface.co/Sumitc13/Flux-Kontext-exposure-control-LoRAs)
+- Generate **ev-4, ev-2, ev+2, ev+4** variants using trigger words
+- **Perfect alignment** - AI ensures consistent composition
+- **No bracketing required** - Generate all exposures from one source
+
 ### EV (Exposure Value) Guidelines:
+
+#### Traditional Capture:
 - **3-Stop**: +2, 0, -2 EV (4x range)
 - **5-Stop**: +4, +2, 0, -2, -4 EV (16x range)
 - Adjust `exposure_step` parameter if using different increments
+
+#### AI-Generated (Using Our LoRAs):
+- **Base image**: Your source image (acts as EV 0)
+- **Generate variants**: Use `ev-4`, `ev-2`, `ev+2`, `ev+4` LoRAs with trigger words
+- **Perfect range**: Covers full 8-stop dynamic range
+- **Consistent quality**: AI ensures proper exposure relationships
 
 ### Algorithm Selection Guide:
 
@@ -330,6 +374,7 @@ luminance-stack-processor/
 - **Debevec, P. E., & Malik, J.** (1997). Recovering high dynamic range radiance maps from photographs. *ACM SIGGRAPH Computer Graphics*, 31(Annual Conference Series), 367-378.
 - **OpenCV HDR Documentation**: https://docs.opencv.org/4.x/d3/db7/tutorial_hdr_imaging.html
 - **ComfyUI Custom Node Guidelines**: https://docs.comfy.org/custom-nodes/
+- **Our FLUX.1 Kontext Exposure LoRAs**: [Flux-Kontext-exposure-control-LoRAs](https://huggingface.co/Sumitc13/Flux-Kontext-exposure-control-LoRAs)
 - **Semantic Versioning**: https://semver.org/
 
 ## 📜 License
