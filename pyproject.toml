@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "luminance-stack-processor"
-version = "1.0.1"
+version = "1.0.5"
 description = "Professional HDR processing nodes for ComfyUI using the Debevec Algorithm"
 readme = "README.md"
 license = { text = "MIT" }
@@ -68,9 +68,17 @@ include = ["luminance_stack_processor*"]
 [tool.setuptools.package-data]
 "*" = ["*.md", "*.txt", "*.toml"]
 
+# ComfyUI Manager metadata
+[tool.comfy]
+name = "luminance-stack-processor"
+description = "Professional HDR processing nodes for ComfyUI using the Debevec Algorithm"
+version = "1.0.5"
+author = "Sumit Chatterjee"
+license = "MIT"
+
 # Version management
 [tool.bumpversion]
-current_version = "1.0.2"
+current_version = "1.0.5"
 parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
 serialize = ["{major}.{minor}.{patch}"]
 search = "{current_version}"

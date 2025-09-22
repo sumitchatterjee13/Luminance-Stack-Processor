@@ -15,7 +15,7 @@ Installation:
 3. Restart ComfyUI
 
 Author: Sumit Chatterjee
-Version: 1.0.1
+Version: 1.0.5
 License: MIT
 """
 
