@@ -841,7 +841,7 @@ class HDRExportNode:
                 "filename_prefix": ("STRING", {"default": "ComfyUI", "tooltip": "Base filename (without extension)"}),
             },
             "optional": {
-                "output_path": ("STRING", {"default": "", "tooltip": "Custom output directory (leave empty for ComfyUI output folder)"}),
+                "output_path": ("STRING", {"default": "", "tooltip": "Output path: Empty=default ComfyUI/output, /subfolder=output/subfolder, or full custom path"}),
                 "counter": ("INT", {"default": 1, "min": 0, "max": 99999, "step": 1, "tooltip": "Frame/sequence counter"}),
                 "format": (["exr", "hdr"], {"default": "exr", "tooltip": "HDR file format"}),
                 "bit_depth": (["16bit", "32bit"], {"default": "32bit", "tooltip": "EXR precision: 32bit = maximum quality, 16bit = smaller files"}),
@@ -882,20 +882,28 @@ class HDRExportNode:
             logger.info(f"HDR Export: Input range [{hdr_array.min():.6f}, {hdr_array.max():.6f}]")
             logger.info(f"HDR Export: Shape {hdr_array.shape}, dtype {hdr_array.dtype}")
             
-            # Determine output path
-            if not output_path or output_path.strip() == "":
-                # Use ComfyUI's output directory
-                try:
-                    import folder_paths
-                    output_dir = folder_paths.get_output_directory()
-                except ImportError:
-                    # Fallback if folder_paths module doesn't exist
-                    output_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "output")
-                except Exception:
-                    # Secondary fallback
-                    output_dir = os.path.join(os.getcwd(), "output")
+            # Check for HDR data
+            hdr_pixels = int(np.sum(hdr_array > 1.0))
+            negative_pixels = int(np.sum(hdr_array < 0.0))
+            logger.info(f"HDR Export: HDR pixels (>1.0): {hdr_pixels}, Negative pixels: {negative_pixels}")
+            
+            # Determine output path - default to ComfyUI/output/ directory
+            output_path_clean = output_path.strip() if output_path else ""
+            
+            if not output_path_clean:
+                # Use default ComfyUI output directory
+                output_dir = self._get_comfyui_output_directory()
+                logger.info(f"Using default ComfyUI output directory: {output_dir}")
+            elif output_path_clean.startswith("/"):
+                # User specified a subdirectory within ComfyUI output (e.g., "/Test" -> "output/Test")
+                base_output_dir = self._get_comfyui_output_directory()
+                subdirectory = output_path_clean[1:]  # Remove leading "/"
+                output_dir = os.path.join(base_output_dir, subdirectory)
+                logger.info(f"Using ComfyUI output subdirectory: {output_dir}")
             else:
-                output_dir = output_path.strip()
+                # User specified absolute or relative custom path
+                output_dir = output_path_clean
+                logger.info(f"Using custom absolute path: {output_dir}")
             
             # Create output directory if it doesn't exist
             os.makedirs(output_dir, exist_ok=True)
@@ -974,16 +982,24 @@ class HDRExportNode:
                     verification_img = cv2.imread(filepath, cv2.IMREAD_UNCHANGED)
                     if verification_img is not None:
                         max_val = np.max(verification_img)
-                        logger.info(f"HDR Export verification: Max value in saved file: {max_val:.6f}")
+                        min_val = np.min(verification_img)
+                        logger.info(f"HDR Export verification: Range in saved file: [{min_val:.6f}, {max_val:.6f}]")
                         
                         if max_val > 1.0:
                             logger.info("✅ HDR values above 1.0 successfully preserved!")
                         else:
                             logger.warning("⚠️ No HDR values above 1.0 detected (may be LDR data)")
+                        
+                        if min_val < 0.0:
+                            logger.info("✅ Negative values preserved (signed HDR range)")
                             
                         # Check file size as secondary verification
                         file_size_mb = os.path.getsize(filepath) / (1024 * 1024)
                         logger.info(f"HDR file size: {file_size_mb:.2f} MB")
+                        
+                        # Get image stats
+                        stats = self._get_file_stats(filepath)
+                        logger.info(f"Image dimensions: {stats['width']}x{stats['height']}, {stats['channels']} channels")
                         
                     else:
                         logger.warning("Could not verify saved HDR file")
@@ -1004,6 +1020,49 @@ class HDRExportNode:
             error_path = f"ERROR: {str(e)}"
             return (error_path,)
     
+    def _get_comfyui_output_directory(self) -> str:
+        """
+        Determine the ComfyUI output directory using multiple fallback methods
+        Returns the path to the ComfyUI output directory
+        """
+        try:
+            import folder_paths
+            output_dir = folder_paths.get_output_directory()
+            logger.info(f"Found ComfyUI output directory via folder_paths: {output_dir}")
+            return output_dir
+        except ImportError:
+            # Fallback: Look for ComfyUI output directory structure
+            # Navigate up from custom_nodes to find ComfyUI root
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            comfyui_root = None
+            
+            # Try to find ComfyUI root by looking for typical structure
+            search_dir = current_dir
+            for _ in range(5):  # Search up to 5 levels up
+                if os.path.exists(os.path.join(search_dir, "custom_nodes")) and \
+                   os.path.exists(os.path.join(search_dir, "models")):
+                    comfyui_root = search_dir
+                    break
+                search_dir = os.path.dirname(search_dir)
+            
+            if comfyui_root:
+                output_dir = os.path.join(comfyui_root, "output")
+                logger.info(f"Found ComfyUI root, using output directory: {output_dir}")
+                return output_dir
+            else:
+                # Final fallback - assume we're in custom_nodes and go up 2 levels
+                output_dir = os.path.join(os.path.dirname(os.path.dirname(current_dir)), "output")
+                logger.info(f"Using fallback output directory: {output_dir}")
+                return output_dir
+                
+        except Exception as e:
+            logger.warning(f"Error determining ComfyUI output directory: {e}")
+            # Emergency fallback - try to create output directory relative to current location
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            output_dir = os.path.join(os.path.dirname(os.path.dirname(current_dir)), "output")
+            logger.info(f"Using emergency fallback output directory: {output_dir}")
+            return output_dir
+
     def _get_file_stats(self, filepath: str) -> dict:
         """Get statistics about the saved file"""
         try:
