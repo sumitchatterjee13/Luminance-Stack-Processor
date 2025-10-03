@@ -6,7 +6,7 @@
 [![ComfyUI](https://img.shields.io/badge/ComfyUI-compatible-orange.svg)](https://github.com/comfyanonymous/ComfyUI)
 [![GitHub](https://img.shields.io/badge/GitHub-Repository-black.svg)](https://github.com/sumitchatterjee13/Luminance-Stack-Processor)
 
-Professional HDR (High Dynamic Range) processing nodes for ComfyUI featuring our revolutionary **Detail Injection** algorithm (now default!) and **Radiance Fusion Algorithm** - custom HDR processing methods that deliver enhanced results for both AI-generated and real-world images.
+HDR (High Dynamic Range) processing nodes for ComfyUI featuring my **Detail Injection** algorithm (default) and **Radiance Fusion Algorithm** - custom HDR processing methods that deliver good results for both AI-generated and real-world images.
 
 **Version: 1.1.8** | **Release Date: 2025-10-02**
 
@@ -24,21 +24,21 @@ Professional HDR (High Dynamic Range) processing nodes for ComfyUI featuring our
   - **Hermite Interpolation**: Smooth blending prevents harsh transitions
   - **EV0 Base Preservation**: Keeps natural appearance while extending dynamic range
   - **Linear HDR Output**: True HDR values for professional EXR export
-- **🚀 RADIANCE FUSION ALGORITHM**: Our custom HDR algorithm developed in-house
-  - **Nuke-Inspired Mathematics**: Based on professional VFX pipeline operations (plus/average)
+- **🚀 RADIANCE FUSION ALGORITHM**: My custom HDR algorithm
+  - **Nuke-Inspired Mathematics**: Based on VFX pipeline operations (plus/average)
   - **Enhanced HDR Preservation**: Maintains excellent dynamic range with natural appearance  
   - **Improved Results**: Provides quality improvements over traditional methods
-  - **Professional VFX Quality**: Suitable for film, TV, and visual effects work
+  - **For VFX Work**: Suitable for compositing workflows
 - **🆕 TRUE 32-bit EXR Export**: Professional bit-depth control with imageio integration
 - **🚨 TRUE HDR Values Above 1.0**: Proper HDR data preservation without normalization
-- **🔬 DEBEVEC WITH ADAPTIVE CALIBRATION** *(Production Ready)*:
+- **🔬 DEBEVEC WITH ADAPTIVE CALIBRATION** *(Experimental)*:
   - **AI-Aware Calibration**: Automatically analyzes and corrects exposure relationships for AI-generated images
-  - **Physically-Based Recovery**: True linear radiance with professional VFX quality
+  - **Physically-Based Recovery**: True linear radiance output
   - **Anti-Banding Filtering**: Subtle bilateral filtering reduces quantization artifacts
   - **Exposure Compensation**: Built-in -8 stop default for proper viewing in Nuke/Resolve
-  - **Perfect for VFX**: Scene-referred linear data ready for professional compositing
+  - **For VFX Work**: Scene-referred linear data for compositing workflows
 - **Legacy HDR Algorithms** *(Work in Progress)*:
-  - **Robertson**: Alternative HDR method with adaptive calibration *(production ready)*
+  - **Robertson**: Alternative HDR method with adaptive calibration *(experimental)*
   - **Natural Blend**: EV0 appearance preservation *(under refinement)*
   - **Mertens**: Exposure fusion method *(being optimized)*
 - **Four Custom Nodes**:
@@ -53,7 +53,7 @@ Professional HDR (High Dynamic Range) processing nodes for ComfyUI featuring our
 
 ### HDR Processing Comparison
 
-See the dramatic difference our Radiance Fusion Algorithm makes in preserving detail across exposure ranges:
+See the dramatic difference my Radiance Fusion Algorithm makes in preserving detail across exposure ranges:
 
 #### Indoor Lighting Comparison
 ![Bulb Comparison](images/Bulb.jpg)
@@ -67,7 +67,7 @@ See the dramatic difference our Radiance Fusion Algorithm makes in preserving de
 ![Highlight Clamping Comparison](images/Reduce%20highlight%20clamping.jpg)
 *Demonstration of reduced highlight clamping - preserving bright details that would normally be lost*
 
-These comparison strips demonstrate how our HDR processing maintains detail in both highlights and shadows that would be lost in single-exposure captures.
+These comparison strips demonstrate how my HDR processing maintains detail in both highlights and shadows that would be lost in single-exposure captures.
 
 ## 📖 Algorithm Explanation
 
@@ -118,11 +118,11 @@ AI-generated images simulate different exposures but don't have true photometric
 
 #### **Why Use Detail Injection?**
 
-✅ **For AI-Generated HDR Stacks**: Perfect for Flux, SD, MJ exposure variations  
+✅ **For AI-Generated HDR Stacks**: Works well with Flux, SD, MJ exposure variations  
 ✅ **Natural EV0 Base**: Looks correct at middle exposure  
-✅ **True HDR Range**: Values >1.0 for professional color grading  
+✅ **True HDR Range**: Values >1.0 for color grading workflows  
 ✅ **Automatic Exposure**: No manual brightness adjustment needed  
-✅ **Smooth Blending**: No harsh transitions or artifacts  
+✅ **Smooth Blending**: Reduces harsh transitions and artifacts  
 ✅ **Color Accuracy**: Maintains hue using luminance-based scaling  
 
 #### **When to Use Other Algorithms?**
@@ -147,9 +147,9 @@ EV-2 image = 4x darker than EV0
 
 But **AI-generated images don't follow these rules!** Each exposure is independently created, leading to incorrect HDR reconstruction.
 
-#### **Our Solution: Adaptive Exposure Calibration**
+#### **My Solution: Adaptive Exposure Calibration**
 
-We've developed an intelligent calibration system that **automatically analyzes and corrects** the exposure relationships:
+I've developed an intelligent calibration system that **automatically analyzes and corrects** the exposure relationships:
 
 **Step 1: Analyze Actual Brightness Relationships**
 ```python
@@ -212,15 +212,15 @@ Calibrated:    0.082s  (corrected time that matches AI's behavior)
 **Why It Works:**
 - Debevec's algorithm has 2 steps: estimate camera response, recover radiance
 - AI's "broken" exposure relationships = weird camera response curve
-- By adjusting exposure times, we're telling Debevec about this "weird camera"
+- By adjusting exposure times, this approach tells Debevec about this "weird camera"
 - Debevec adapts and correctly recovers the scene's linear radiance!
 
 **When to Use Debevec:**
 - ✅ **VFX compositing in Nuke/After Effects** - Scene-referred linear data
-- ✅ **Professional color grading** - Maximum flexibility
-- ✅ **AI-generated brackets** - Adaptive calibration handles them perfectly
+- ✅ **Color grading workflows** - Maximum flexibility for post-processing
+- ✅ **AI-generated brackets** - Adaptive calibration helps with non-physical exposures
 - ✅ **Real camera exposures** - Works for traditional bracketing too
-- ✅ **When you need physically-based radiance** - Mathematically correct values
+- ✅ **When you need physically-based radiance** - Linear radiance values
 
 **Parameters:**
 - `auto_calibrate`: Enable/disable adaptive calibration (default: True)
@@ -252,7 +252,7 @@ Applied exposure compensation: -8.0 stops (factor: 0.003906x)
 Debevec compensated output: [0.00004, 454.60]
 ```
 
-**Result:** Perfect HDR recovery from AI-generated brackets! 🎯
+**Result:** HDR recovery from AI-generated brackets with adaptive calibration! 🎯
 
 ---
 
@@ -261,8 +261,8 @@ Debevec compensated output: [0.00004, 454.60]
 Nuke-inspired HDR blending using mathematical operations:
 - **Plus operation**: Adds all outer exposures
 - **Average operation**: Balances with center exposure  
-- **Perfect HDR preservation**: Maintains full dynamic range
-- **Best for**: Professional VFX pipelines familiar with Nuke
+- **HDR preservation**: Maintains good dynamic range
+- **Good for**: VFX workflows familiar with Nuke-style operations
 
 ---
 
@@ -313,26 +313,26 @@ Nuke-inspired HDR blending using mathematical operations:
 
 ## 📁 ComfyUI Workflow
 
-A complete example workflow for ComfyUI is provided in the `/workflow` directory. This demonstrates a good setup for HDR processing using our Radiance Fusion algorithm.
+A complete example workflow for ComfyUI is provided in the `/workflow` directory. This demonstrates a good setup for HDR processing using my Radiance Fusion algorithm.
 
 ### Example Workflow Setup
 ![ComfyUI Workflow](images/Comfyui%20workflow.jpg)
-*Complete ComfyUI workflow showing proper HDR processing setup with our custom nodes*
+*Complete ComfyUI workflow showing proper HDR processing setup with my custom nodes*
 
 ## 🎨 AI-Generated HDR from Single Images
 
-We've developed a complete workflow for creating HDR images from a single source image using **FLUX.1 Kontext exposure control LoRAs**:
+I've developed a complete workflow for creating HDR images from a single source image using **FLUX.1 Kontext exposure control LoRAs**:
 
 ### 🚀 **The Complete Pipeline:**
 
 1. **Start with any image** - Generated from any model or captured photo
-2. **Generate exposure variants** - Use our trained LoRAs to create EV-4, EV-2, EV0, EV+2, EV+4 versions
-3. **Process with Radiance Fusion** - Feed the synthetic exposures into our HDR nodes
+2. **Generate exposure variants** - Use my trained LoRAs to create EV-4, EV-2, EV0, EV+2, EV+4 versions
+3. **Process with Radiance Fusion** - Feed the synthetic exposures into my HDR nodes
 4. **Get professional HDR** - Output true 32-bit HDR images with enhanced dynamic range
 
 ### 📦 **Exposure Control LoRAs:**
 
-Our custom-trained LoRAs for **FLUX.1 Kontext (dev)** can generate different exposure levels from a single image:
+My custom-trained LoRAs for **FLUX.1 Kontext (dev)** can generate different exposure levels from a single image:
 
 - **Available LoRAs**: `ev-4`, `ev-2`, `ev+2`, `ev+4` (with corresponding trigger words)
 - **Easy to use**: Simply add the trigger word and adjust LoRA weight  
@@ -343,7 +343,7 @@ Our custom-trained LoRAs for **FLUX.1 Kontext (dev)** can generate different exp
 
 - ✅ **Single image input** - No need for multiple captures or bracketing
 - ✅ **AI-generated exposures** - Perfect synthetic exposure variants
-- ✅ **Professional HDR output** - True HDR with our Radiance Fusion processing
+- ✅ **Professional HDR output** - True HDR with my Radiance Fusion processing
 - ✅ **Complete automation** - Generate and process in one workflow
 - ✅ **Creative freedom** - Work with any generated or captured image
 
@@ -377,7 +377,7 @@ Perfect for standard HDR bracketing with 3 exposures:
 - `ev_minus_2`: Underexposed image (-2 EV)
 - `exposure_step`: (Optional) EV step size (default: 2.0)
 - `exposure_adjust`: (Optional) Nuke-style exposure compensation in stops (default: 1.0)
-- `hdr_algorithm`: Choose **"radiance_fusion"** (default - *our custom algorithm*), "natural_blend", "mertens", "debevec", "robertson"
+- `hdr_algorithm`: Choose **"radiance_fusion"** (default - *my custom algorithm*), "natural_blend", "mertens", "debevec", "robertson"
 
 **Output:**
 - `hdr_image`: HDR tensor with values potentially above 1.0
@@ -406,7 +406,7 @@ For extended dynamic range with 5 exposures:
 - `ev_minus_4`: Underexposed image (-4 EV)
 - `exposure_step`: (Optional) EV step size (default: 2.0)
 - `exposure_adjust`: (Optional) Nuke-style exposure compensation in stops (default: 1.0)
-- `hdr_algorithm`: Choose **"radiance_fusion"** (default - *our custom algorithm*), "natural_blend", "mertens", "debevec", "robertson"
+- `hdr_algorithm`: Choose **"radiance_fusion"** (default - *my custom algorithm*), "natural_blend", "mertens", "debevec", "robertson"
 
 **Output:**
 - `hdr_image`: HDR tensor with values potentially above 1.0
@@ -499,7 +499,7 @@ For extended dynamic range with 5 exposures:
 - When working with latent representations from VAE encode
 - For faster processing without decoding to image space
 - When you want to merge multiple exposure latents before final decode
-- In AI-generated HDR workflows using our FLUX.1 Kontext LoRAs
+- In AI-generated HDR workflows using my FLUX.1 Kontext LoRAs
 - When you need noise reduction in latent space
 
 **Workflow Example:**
@@ -518,7 +518,7 @@ For extended dynamic range with 5 exposures:
 1. **Load Images**: Load your bracketed exposures (3 or 5 images)
 2. **Add Processing Node**: "Luminance Stack Processor (3/5 Stops)"
 3. **Connect Exposures**: Connect each EV image to corresponding input
-4. **Choose Algorithm**: Select HDR algorithm (**Radiance Fusion recommended - our custom algorithm**)
+4. **Choose Algorithm**: Select HDR algorithm (**Radiance Fusion recommended - my custom algorithm**)
 5. **Add Export Node**: "HDR Export to EXR" 
 6. **Connect HDR Output**: From processor to export node
 7. **Set Filename**: Enter desired filename prefix
@@ -527,34 +527,33 @@ For extended dynamic range with 5 exposures:
 
 ## 🔬 How It Works
 
-The nodes feature our **Radiance Fusion Algorithm** as the default, plus traditional algorithms for compatibility:
+The nodes feature my **Radiance Fusion Algorithm** as the default, plus traditional algorithms for compatibility:
 
 1. **Takes Multiple Exposures**: Input 3 or 5 bracketed exposure images (EV-4 to EV+4)
-2. **Selects HDR Algorithm**: Choose **Radiance Fusion** (our custom algorithm) or traditional methods
+2. **Selects HDR Algorithm**: Choose **Radiance Fusion** (my custom algorithm) or traditional methods
 3. **Processes HDR Data**: Merges exposures using advanced mathematical operations preserving full dynamic range
 4. **Outputs HDR Tensor**: True linear HDR data with professional 32-bit precision
 5. **🚨 CRITICAL: Use HDR Export Node**: Exports professional 32-bit EXR files with preserved HDR values
 
 ### 🎯 **HDR Algorithm Options:**
 
-#### **🚀 Radiance Fusion (Default - Our Custom Algorithm)**  
+#### **🚀 Radiance Fusion (Default - My Custom Algorithm)**  
 - **📈 HDR Range**: Wide dynamic range with good preservation
 - **🧮 Advanced Mathematics**: Nuke-inspired plus/average operations for enhanced results
-- **🎬 Professional Quality**: VFX-grade HDR processing with natural appearance
+- **🎬 Quality**: VFX-oriented HDR processing with natural appearance
 - **⚡ Good Performance**: Well-balanced dynamic range and visual appeal
-- **🔬 In-House Development**: Our custom algorithm with improvements over traditional methods
-- **💎 Quality Focus**: Enhanced compared to standard HDR techniques
+- **🔬 In-House Development**: My custom algorithm with improvements over traditional methods
+- **💎 Quality Focus**: Enhanced compared to standard techniques
 
 ---
 
-#### **🔬 Debevec with Adaptive Calibration** *(Production Ready)*
-- **Status**: Fully functional with AI-aware calibration
+#### **🔬 Debevec with Adaptive Calibration** *(Experimental)*
+- **Status**: Functional with AI-aware calibration
 - **HDR Range**: Raw linear radiance (0 to 8000+ values)
-- **Quality**: ⭐⭐⭐⭐⭐ Professional VFX grade
-- **Purpose**: Scene-referred linear radiance for VFX compositing
+- **Purpose**: Scene-referred linear radiance for VFX workflows
 - **Best For**: 
-  - VFX artists working in Nuke/After Effects
-  - Professional color grading workflows
+  - VFX compositing in Nuke/After Effects
+  - Color grading workflows
   - AI-generated exposure brackets (adaptive calibration)
   - Real camera exposures (traditional bracketing)
 - **Features**:
@@ -563,9 +562,9 @@ The nodes feature our **Radiance Fusion Algorithm** as the default, plus traditi
   - Built-in exposure compensation (-8 stops default)
   - Detailed calibration logging
 
-#### **⚙️ Robertson with Adaptive Calibration** *(Production Ready)*
+#### **⚙️ Robertson with Adaptive Calibration** *(Experimental)*
 - **Status**: Alternative to Debevec with same calibration
-- **HDR Range**: Raw linear radiance (VFX standard)
+- **HDR Range**: Raw linear radiance
 - **Purpose**: Alternative HDR recovery method with calibration
 
 ---
@@ -593,7 +592,7 @@ The nodes feature our **Radiance Fusion Algorithm** as the default, plus traditi
 
 ### For AI-Generated Exposures (Modern Workflow):
 - Start with **any single image** (generated or captured)
-- Use our **FLUX.1 Kontext LoRAs** to create exposure variants
+- Use my **FLUX.1 Kontext LoRAs** to create exposure variants
 - Download LoRAs: [Flux-Kontext-exposure-control-LoRAs](https://huggingface.co/Sumitc13/Flux-Kontext-exposure-control-LoRAs)
 - Generate **ev-4, ev-2, ev+2, ev+4** variants using trigger words
 - **Perfect alignment** - AI ensures consistent composition
@@ -606,7 +605,7 @@ The nodes feature our **Radiance Fusion Algorithm** as the default, plus traditi
 - **5-Stop**: +4, +2, 0, -2, -4 EV (16x range)
 - Adjust `exposure_step` parameter if using different increments
 
-#### AI-Generated (Using Our LoRAs):
+#### AI-Generated (Using My LoRAs):
 - **Base image**: Your source image (acts as EV 0)
 - **Generate variants**: Use `ev-4`, `ev-2`, `ev+2`, `ev+4` LoRAs with trigger words
 - **Perfect range**: Covers full 8-stop dynamic range
@@ -615,20 +614,20 @@ The nodes feature our **Radiance Fusion Algorithm** as the default, plus traditi
 ### Algorithm Selection Guide:
 
 #### 🎬 **For VFX/Post-Production (Scene-Referred Linear):**
-- **🔬 Debevec with Adaptive Calibration** ⭐ (Recommended for VFX): Production-ready with AI-aware calibration
-  - Perfect for Nuke/After Effects compositing
+- **🔬 Debevec with Adaptive Calibration** *(Experimental)*: AI-aware calibration for non-physical exposures
+  - For Nuke/After Effects compositing workflows
   - Works with both AI-generated and real camera exposures
   - Includes anti-banding and exposure compensation
   - Outputs true linear radiance (flat/desaturated is correct!)
-- **⚙️ Robertson with Adaptive Calibration**: Alternative to Debevec with same features
+- **⚙️ Robertson with Adaptive Calibration** *(Experimental)*: Alternative to Debevec with same features
 - **🚀 Radiance Fusion**: Nuke-style operations with more display-friendly output
 
 #### 🎨 **For Photography/Display (Display-Referred):**
-- **🎨 Detail Injection** ⭐ (Default): Best for AI-generated images with natural appearance
+- **🎨 Detail Injection** (Default): Good for AI-generated images with natural appearance
   - Automatic brightness compensation
-  - Beautiful output ready for viewing
+  - Display-ready output
   - True HDR values with smooth blending
-- **🚀 Radiance Fusion**: Enhanced quality with good dynamic range
+- **🚀 Radiance Fusion**: Good quality with decent dynamic range
 - **🌟 Natural Blend** *(Work in Progress)*: Being optimized for better results
 - **💫 Mertens** *(Work in Progress)*: Traditional method under improvement
 
@@ -686,7 +685,7 @@ The nodes feature our **Radiance Fusion Algorithm** as the default, plus traditi
    - Ensure input images are properly exposed (not all over/under)
    - Check that images are aligned (use tripod)  
    - Verify EV differences match your capture method
-   - **Recommended**: Use Radiance Fusion (our custom algorithm) for good results
+   - **Recommended**: Use Radiance Fusion (my custom algorithm) for good results
    - **Legacy algorithms**: Available for compatibility but under active improvement
 
 5. **Memory issues**:
@@ -755,7 +754,7 @@ luminance-stack-processor/
 - **Debevec, P. E., & Malik, J.** (1997). Recovering high dynamic range radiance maps from photographs. *ACM SIGGRAPH Computer Graphics*, 31(Annual Conference Series), 367-378.
 - **OpenCV HDR Documentation**: https://docs.opencv.org/4.x/d3/db7/tutorial_hdr_imaging.html
 - **ComfyUI Custom Node Guidelines**: https://docs.comfy.org/custom-nodes/
-- **Our FLUX.1 Kontext Exposure LoRAs**: [Flux-Kontext-exposure-control-LoRAs](https://huggingface.co/Sumitc13/Flux-Kontext-exposure-control-LoRAs)
+- **My FLUX.1 Kontext Exposure LoRAs**: [Flux-Kontext-exposure-control-LoRAs](https://huggingface.co/Sumitc13/Flux-Kontext-exposure-control-LoRAs)
 - **Semantic Versioning**: https://semver.org/
 
 ## 📜 License
@@ -773,7 +772,7 @@ For issues, questions, or contributions:
 - Ensure all dependencies are properly installed
 
 ### Contributing
-We welcome contributions! Please:
+I welcome contributions! Please:
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Commit your changes (`git commit -m 'Add some amazing feature'`)
@@ -782,4 +781,4 @@ We welcome contributions! Please:
 
 ---
 
-**Happy HDR Processing with Radiance Fusion!** 🚀✨ | **Version 1.0.5** | **Featuring Our Custom Algorithm**
+**Happy HDR Processing with Radiance Fusion!** 🚀✨ | **Version 1.0.5** | **Featuring My Custom Algorithm**
