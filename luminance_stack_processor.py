@@ -352,10 +352,16 @@ class DebevecHDRProcessor:
             times = np.array(exposure_times, dtype=np.float32)
             
             # ADAPTIVE AUTO-CALIBRATION for AI-generated images
-            if auto_calibrate and algorithm in ["debevec", "robertson"]:
-                logger.info("🔬 AUTO-CALIBRATION ENABLED for AI-generated brackets")
-                times_calibrated = np.array(self._calibrate_exposure_times(processed_images, times.tolist()), dtype=np.float32)
-                times = times_calibrated
+            # CRITICAL: Only apply for debevec and robertson algorithms
+            if auto_calibrate:
+                if algorithm in ["debevec", "robertson"]:
+                    logger.info("🔬 AUTO-CALIBRATION ENABLED for AI-generated brackets")
+                    times_calibrated = np.array(self._calibrate_exposure_times(processed_images, times.tolist()), dtype=np.float32)
+                    times = times_calibrated
+                else:
+                    logger.info(f"⚠️ Auto-calibrate is enabled but has NO EFFECT on '{algorithm}' mode (only works with debevec/robertson)")
+            else:
+                logger.info("Auto-calibration DISABLED")
             
             logger.info(f"Processing {len(processed_images)} images with {algorithm} algorithm")
             logger.info(f"Exposure times: {times}")
@@ -1210,56 +1216,76 @@ class DebevecHDRProcessor:
             logger.info("  EV+4 extreme shadow injection complete")
         
         # Step 4: Automatic Brightness Compensation
-        logger.info("\nStep 4: Automatic Brightness Compensation")
+        logger.info("\nStep 4: Automatic Brightness Compensation (HDR-Preserving)")
         logger.info("-" * 40)
         
-        # Calculate current mean using 50th percentile (median) as reference
-        # This is more robust than mean for images with extreme values
-        result_flat = result.flatten()
+        # CRITICAL: Calculate brightness based ONLY on base range (0-1.0)
+        # This prevents HDR values from affecting brightness calculation
+        base_range_mask = result <= 1.0
+        base_range_pixels = result[base_range_mask]
         
-        # Calculate median across all channels
-        current_median = np.median(result_flat)
-        
-        # Also calculate mean for comparison
-        current_mean = np.mean(result_flat)
-        
-        # Target: 0.18 in linear space = 18% gray = professional middle gray
-        # For very dark images, use median-based scaling
-        # For normal images, use mean-based scaling
-        target_value = 0.18
-        
-        logger.info(f"  Current median: {current_median:.4f}")
-        logger.info(f"  Current mean: {current_mean:.4f}")
-        logger.info(f"  Target (18% gray): {target_value:.4f}")
-        
-        # Use median if image is very dark (shadows dominate)
-        # Use mean if image has reasonable brightness distribution
-        if current_median < 0.05:
-            # Very dark image - use median for scaling
-            reference_value = current_median
-            logger.info(f"  Using median-based scaling (image is very dark)")
-        else:
-            # Normal image - use mean for scaling
-            reference_value = current_mean
-            logger.info(f"  Using mean-based scaling (normal brightness)")
-        
-        if reference_value > 0.001:  # Avoid division by zero
-            brightness_factor = target_value / reference_value
+        if base_range_pixels.size > 0:
+            current_median = np.median(base_range_pixels)
+            current_mean = np.mean(base_range_pixels)
             
-            # More permissive range for brightness adjustment (0.3x to 8.0x)
-            # This allows proper recovery of very dark or very bright images
-            brightness_factor = np.clip(brightness_factor, 0.3, 8.0)
+            # Target: 0.18 in linear space = 18% gray = professional middle gray
+            target_value = 0.18
             
-            if abs(brightness_factor - 1.0) > 0.05:  # Only adjust if significant difference
-                logger.info(f"  Applying brightness compensation: {brightness_factor:.3f}x")
-                result = result * brightness_factor
-                logger.info(f"  New value range: [{result.min():.4f}, {result.max():.4f}]")
-                logger.info(f"  New mean: {result.mean():.4f}")
-                logger.info(f"  New median: {np.median(result):.4f}")
+            logger.info(f"  Current median (base range): {current_median:.4f}")
+            logger.info(f"  Current mean (base range): {current_mean:.4f}")
+            logger.info(f"  Target (18% gray): {target_value:.4f}")
+            logger.info(f"  HDR pixels (>1.0): {np.sum(result > 1.0)}")
+            
+            # Use median if image is very dark (shadows dominate)
+            # Use mean if image has reasonable brightness distribution
+            if current_median < 0.05:
+                # Very dark image - use median for scaling
+                reference_value = current_median
+                logger.info(f"  Using median-based scaling (image is very dark)")
             else:
-                logger.info("  No brightness adjustment needed (already optimal)")
+                # Normal image - use mean for scaling
+                reference_value = current_mean
+                logger.info(f"  Using mean-based scaling (normal brightness)")
+            
+            if reference_value > 0.001:  # Avoid division by zero
+                brightness_factor = target_value / reference_value
+                
+                # More permissive range for brightness adjustment (0.3x to 8.0x)
+                # This allows proper recovery of very dark or very bright images
+                brightness_factor = np.clip(brightness_factor, 0.3, 8.0)
+                
+                if abs(brightness_factor - 1.0) > 0.05:  # Only adjust if significant difference
+                    logger.info(f"  Applying brightness compensation: {brightness_factor:.3f}x")
+                    
+                    # CRITICAL: Apply compensation differently based on whether we're brightening or darkening
+                    if brightness_factor >= 1.0:
+                        # Brightening: Apply to ALL pixels including HDR (scales everything up)
+                        result = result * brightness_factor
+                        logger.info(f"  Brightening mode: Applied to all pixels including HDR")
+                    else:
+                        # Darkening: Only darken base range (0-1.0), preserve HDR values
+                        # HDR values represent recoverable highlight detail - we must preserve them!
+                        hdr_mask = result > 1.0
+                        hdr_values = result[hdr_mask].copy()  # Save HDR values
+                        
+                        # Apply darkening to base range
+                        result = result * brightness_factor
+                        
+                        # Restore HDR values (unscaled)
+                        result[hdr_mask] = hdr_values
+                        logger.info(f"  Darkening mode: Applied to base range only, HDR values preserved")
+                        logger.info(f"  Preserved {np.sum(hdr_mask)} HDR pixels above 1.0")
+                    
+                    logger.info(f"  New value range: [{result.min():.4f}, {result.max():.4f}]")
+                    logger.info(f"  New mean (base range): {np.mean(result[result <= 1.0]):.4f}")
+                    logger.info(f"  New median (base range): {np.median(result[result <= 1.0]):.4f}")
+                    logger.info(f"  HDR pixels preserved: {np.sum(result > 1.0)}")
+                else:
+                    logger.info("  No brightness adjustment needed (already optimal)")
+            else:
+                logger.warning("  Skipping brightness compensation (image too dark)")
         else:
-            logger.warning("  Skipping brightness compensation (image too dark)")
+            logger.warning("  No base range pixels found for brightness compensation")
         
         # Final statistics
         logger.info("\nStep 5: Final Result Statistics (Linear HDR)")
