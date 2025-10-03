@@ -1,17 +1,29 @@
 # Luminance Stack Processor - ComfyUI Custom Nodes
 
-[![Version](https://img.shields.io/badge/version-1.0.5-blue.svg)](https://github.com/sumitchatterjee13/Luminance-Stack-Processor)
+[![Version](https://img.shields.io/badge/version-1.1.8-blue.svg)](https://github.com/sumitchatterjee13/Luminance-Stack-Processor)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/sumitchatterjee13/Luminance-Stack-Processor/blob/main/LICENSE)
 [![ComfyUI](https://img.shields.io/badge/ComfyUI-compatible-orange.svg)](https://github.com/comfyanonymous/ComfyUI)
 [![GitHub](https://img.shields.io/badge/GitHub-Repository-black.svg)](https://github.com/sumitchatterjee13/Luminance-Stack-Processor)
 
-Professional HDR (High Dynamic Range) processing nodes for ComfyUI featuring our **Radiance Fusion Algorithm** - a custom HDR processing method that delivers enhanced results through Nuke-inspired mathematical operations.
+Professional HDR (High Dynamic Range) processing nodes for ComfyUI featuring our revolutionary **Detail Injection** algorithm (now default!) and **Radiance Fusion Algorithm** - custom HDR processing methods that deliver enhanced results for both AI-generated and real-world images.
 
-**Version: 1.0.5** | **Release Date: 2025-01-21**
+**Version: 1.1.8** | **Release Date: 2025-10-02**
 
 ## 🎯 Features
 
+- **🎨 DETAIL INJECTION ALGORITHM** *(DEFAULT since v1.1.3)*: Revolutionary AI-aware HDR processing
+  - **Perfect for AI-Generated Images**: Specifically designed for AI exposure stacks
+  - **Now the default algorithm**: Best results out-of-the-box
+  - **Automatic Gamma Detection**: Analyzes and corrects sRGB gamma 2.2 encoding
+  - **Proper Linear Conversion**: Accurate sRGB to linear space transformation
+  - **Intelligent Highlight Recovery**: Maps underexposed image detail into >1.0 HDR range
+  - **Smart Shadow Recovery**: Injects overexposed detail into dark shadow regions
+  - **Automatic Brightness Compensation**: Targets professional 18% gray standard
+  - **Color Preservation**: Maintains hue using luminance-based scaling
+  - **Hermite Interpolation**: Smooth blending prevents harsh transitions
+  - **EV0 Base Preservation**: Keeps natural appearance while extending dynamic range
+  - **Linear HDR Output**: True HDR values for professional EXR export
 - **🚀 RADIANCE FUSION ALGORITHM**: Our custom HDR algorithm developed in-house
   - **Nuke-Inspired Mathematics**: Based on professional VFX pipeline operations (plus/average)
   - **Enhanced HDR Preservation**: Maintains excellent dynamic range with natural appearance  
@@ -19,14 +31,20 @@ Professional HDR (High Dynamic Range) processing nodes for ComfyUI featuring our
   - **Professional VFX Quality**: Suitable for film, TV, and visual effects work
 - **🆕 TRUE 32-bit EXR Export**: Professional bit-depth control with imageio integration
 - **🚨 TRUE HDR Values Above 1.0**: Proper HDR data preservation without normalization
+- **🔬 DEBEVEC WITH ADAPTIVE CALIBRATION** *(Production Ready)*:
+  - **AI-Aware Calibration**: Automatically analyzes and corrects exposure relationships for AI-generated images
+  - **Physically-Based Recovery**: True linear radiance with professional VFX quality
+  - **Anti-Banding Filtering**: Subtle bilateral filtering reduces quantization artifacts
+  - **Exposure Compensation**: Built-in -8 stop default for proper viewing in Nuke/Resolve
+  - **Perfect for VFX**: Scene-referred linear data ready for professional compositing
 - **Legacy HDR Algorithms** *(Work in Progress)*:
+  - **Robertson**: Alternative HDR method with adaptive calibration *(production ready)*
   - **Natural Blend**: EV0 appearance preservation *(under refinement)*
   - **Mertens**: Exposure fusion method *(being optimized)*
-  - **Debevec**: Traditional HDR recovery *(legacy support)*
-  - **Robertson**: Alternative HDR method *(legacy support)*
-- **Three Custom Nodes**:
-  - **3-Stop Processor**: Merges EV+2, EV+0, EV-2 exposures
-  - **5-Stop Processor**: Merges EV+4, EV+2, EV+0, EV-2, EV-4 exposures
+- **Four Custom Nodes**:
+  - **3-Stop Processor**: Merges EV+2, EV+0, EV-2 exposures (Image space)
+  - **5-Stop Processor**: Merges EV+4, EV+2, EV+0, EV-2, EV-4 exposures (Image space)
+  - **🆕 Latent Stack Processor**: Fast latent-space averaging for 5 exposures (Latent space)
   - **HDR Export**: Saves EXR files with preserved HDR data
 - **ComfyUI-Style Interface**: Filename and path inputs like built-in save nodes
 - **HDR Verification**: Automatic checking that HDR data is preserved in exports
@@ -50,6 +68,203 @@ See the dramatic difference our Radiance Fusion Algorithm makes in preserving de
 *Demonstration of reduced highlight clamping - preserving bright details that would normally be lost*
 
 These comparison strips demonstrate how our HDR processing maintains detail in both highlights and shadows that would be lost in single-exposure captures.
+
+## 📖 Algorithm Explanation
+
+### 🎨 Detail Injection Algorithm (Default)
+
+**What makes Detail Injection special?**
+
+Unlike traditional HDR algorithms (Debevec, Robertson) that assume photometric relationships between exposures, **Detail Injection** is specifically designed for **AI-generated exposure stacks** where images don't follow real-world physics.
+
+#### **The Problem It Solves:**
+
+AI-generated images simulate different exposures but don't have true photometric relationships:
+- Traditional HDR: `radiance_ev-2 = radiance_ev0 × 4` (physics-based)
+- AI-generated: Each exposure is **independently created** (no physics relationship)
+
+#### **How Detail Injection Works:**
+
+**Step 1: sRGB to Linear Conversion**
+- Detects sRGB gamma 2.2 encoding in AI images
+- Converts to linear light space using proper sRGB curve
+- Essential for physically accurate HDR calculations
+
+**Step 2: Highlight Detail Injection** ✨
+- **Problem**: EV0 highlights are clipped (pure white = 1.0)
+- **Solution**: Use detail from underexposed images (EV-2, EV-4)
+- **EV-2 detail → 1.0-2.0 HDR range** (moderate highlights)
+- **EV-4 detail → 2.0-4.0 HDR range** (extreme highlights)
+- Result: Bright areas have **recoverable detail** when you expose down in Nuke/Resolve
+
+**Step 3: Shadow Detail Injection** 🌑
+- **Problem**: EV0 shadows are crushed (pure black = 0.0)
+- **Solution**: Use detail from overexposed images (EV+2, EV+4)
+- **EV+2 detail → shadow recovery** (moderate shadows)
+- **EV+4 detail → deep shadow recovery** (extreme shadows)
+- Result: Dark areas have **liftable detail** when you brighten in post
+
+**Step 4: Automatic Brightness Compensation** 🎚️
+- Analyzes median/mean values
+- Targets **0.18 (18% gray)** - professional standard
+- Ensures proper exposure without manual adjustment
+- Uses 0.3x-8.0x range for extreme correction capability
+
+**Step 5: Smooth Mask Transitions** 🎭
+- Hermite interpolation for S-curve blending
+- 21×21 Gaussian smoothing on masks (not image!)
+- Gradual feathering over wide tonal ranges
+- No visible blend boundaries
+
+#### **Why Use Detail Injection?**
+
+✅ **For AI-Generated HDR Stacks**: Perfect for Flux, SD, MJ exposure variations  
+✅ **Natural EV0 Base**: Looks correct at middle exposure  
+✅ **True HDR Range**: Values >1.0 for professional color grading  
+✅ **Automatic Exposure**: No manual brightness adjustment needed  
+✅ **Smooth Blending**: No harsh transitions or artifacts  
+✅ **Color Accuracy**: Maintains hue using luminance-based scaling  
+
+#### **When to Use Other Algorithms?**
+
+- **Debevec with Adaptive Calibration**: For VFX compositing with scene-referred linear data (AI or real exposures)
+- **Radiance Fusion**: When you want Nuke-style plus/average operations with display-ready output
+- **Robertson with Adaptive Calibration**: Alternative to Debevec for VFX work
+- **Mertens**: For quick preview/display-ready fusion without HDR math
+- **Natural Blend**: When you want to preserve exact EV0 appearance
+
+---
+
+### 🔬 Debevec with Adaptive Calibration (NEW!)
+
+**Revolutionary approach to HDR recovery for AI-generated images!**
+
+Traditional Debevec algorithm assumes **photometric consistency** - that brightness relationships follow physics:
+```
+EV+2 image = 4x brighter than EV0
+EV-2 image = 4x darker than EV0
+```
+
+But **AI-generated images don't follow these rules!** Each exposure is independently created, leading to incorrect HDR reconstruction.
+
+#### **Our Solution: Adaptive Exposure Calibration**
+
+We've developed an intelligent calibration system that **automatically analyzes and corrects** the exposure relationships:
+
+**Step 1: Analyze Actual Brightness Relationships**
+```python
+# For each AI-generated bracket:
+1. Work in sRGB space (matching Debevec's input - NO linear conversion)
+2. Compare actual brightness vs EV0 reference
+3. Compute brightness ratios in well-exposed regions (0.2-0.8 luminance)
+4. Use median filtering to reject outliers
+```
+
+**Step 2: Compute Corrected Exposure Times**
+```python
+# Example: EV+4 image
+Nominal time:  0.267s  (16x longer than EV0 - what physics says)
+sRGB ratio:    2.064x  (AI made it 2.064x brighter in sRGB space)
+Time ratio:    4.924x  (apply ^1.8 power for AI gamma)
+Calibrated:    0.082s  (corrected time that matches AI's behavior)
+
+# The calibration tells Debevec:
+# "This bright image had a SHORTER exposure than expected"
+# So Debevec correctly interprets the scene radiance
+```
+
+**Step 3: Apply Debevec with Corrected Times**
+```python
+# Debevec now works correctly because:
+- Exposure times match actual brightness relationships
+- Camera response function accurately recovered
+- Linear radiance correctly reconstructed
+- No inverted tonality or broken highlights!
+```
+
+**Step 4: Anti-Banding Filter (Optional)**
+```python
+# Subtle bilateral filtering:
+- Reduces 8-bit quantization banding
+- Preserves edges (edge-aware filter)
+- Maintains HDR peaks (80%/20% blend)
+- Smooth gradients without blur
+```
+
+**Step 5: Exposure Compensation**
+```python
+# Default -8 stops (1/256 scale)
+- Brings output to proper viewing levels
+- Maintains relative dynamic range
+- Ready for Nuke/Resolve without manual adjustment
+```
+
+#### **Technical Details**
+
+**Calibration Algorithm:**
+- **Reference anchor**: EV0 defines absolute scale
+- **sRGB-space analysis**: Works in sRGB space (matching Debevec's input)
+- **AI-tuned gamma**: Applies ^1.8 power (gentler than theoretical ^2.2)
+- **Robust statistics**: Median ratios in 0.2-0.8 luminance range
+- **Preserves ratios**: Only corrects relative relationships, not overall scale
+- **Logging**: Detailed calibration report in console
+
+**Why It Works:**
+- Debevec's algorithm has 2 steps: estimate camera response, recover radiance
+- AI's "broken" exposure relationships = weird camera response curve
+- By adjusting exposure times, we're telling Debevec about this "weird camera"
+- Debevec adapts and correctly recovers the scene's linear radiance!
+
+**When to Use Debevec:**
+- ✅ **VFX compositing in Nuke/After Effects** - Scene-referred linear data
+- ✅ **Professional color grading** - Maximum flexibility
+- ✅ **AI-generated brackets** - Adaptive calibration handles them perfectly
+- ✅ **Real camera exposures** - Works for traditional bracketing too
+- ✅ **When you need physically-based radiance** - Mathematically correct values
+
+**Parameters:**
+- `auto_calibrate`: Enable/disable adaptive calibration (default: True)
+- `debevec_exposure_comp`: Exposure compensation in stops (default: -8.0)
+- `debevec_anti_banding`: Enable subtle filtering (default: True)
+
+**Example Log Output:**
+```
+============================================================
+ADAPTIVE EXPOSURE CALIBRATION (sRGB SPACE)
+Analyzing AI-generated brackets as Debevec sees them
+============================================================
+Reference image (EV0): Index 2, Nominal time: 0.016667s
+Working in sRGB space (matching Debevec's input)
+
+Calibrating Image 0 (EV+4):
+  Valid pixels: 826228
+  sRGB brightness ratio: 2.064
+  Exposure time ratio (^1.8): 4.924
+  Expected time ratio: 16.000
+  Nominal time: 0.266667s → Calibrated time: 0.082071s
+  Adjustment factor: 0.308x
+
+[... calibration for other images ...]
+
+Debevec raw output: [0.010, 116377.52]
+Applied anti-banding filter...
+Applied exposure compensation: -8.0 stops (factor: 0.003906x)
+Debevec compensated output: [0.00004, 454.60]
+```
+
+**Result:** Perfect HDR recovery from AI-generated brackets! 🎯
+
+---
+
+### 🚀 Radiance Fusion Algorithm
+
+Nuke-inspired HDR blending using mathematical operations:
+- **Plus operation**: Adds all outer exposures
+- **Average operation**: Balances with center exposure  
+- **Perfect HDR preservation**: Maintains full dynamic range
+- **Best for**: Professional VFX pipelines familiar with Nuke
+
+---
 
 ## 📋 Requirements
 
@@ -196,6 +411,108 @@ For extended dynamic range with 5 exposures:
 **Output:**
 - `hdr_image`: HDR tensor with values potentially above 1.0
 
+### 🆕 Latent Stack Processor (5 Stops)
+
+**NEW!** Fast latent-space processing with **intelligent noise reduction**:
+
+**What it does:**
+- Performs weighted averaging of latent representations with multiple blend modes
+- Works directly in latent space (before VAE decode)
+- Faster than image-space processing
+- **Built-in noise reduction** through smart blending strategies
+- Ideal for diffusion model workflows
+
+**Inputs:**
+- `latent_1`: First exposure latent (e.g., EV+4)
+- `latent_2`: Second exposure latent (e.g., EV+2)
+- `latent_3`: Third exposure latent (e.g., EV0 - center exposure)
+- `latent_4`: Fourth exposure latent (e.g., EV-2)
+- `latent_5`: Fifth exposure latent (e.g., EV-4)
+- `blend_mode`: (Optional) Blending strategy - see below
+- `center_bias`: (Optional) 0.0-0.8, how much to favor center exposure (default: 0.4)
+
+**Output:**
+- `merged_latent`: Intelligently blended latent that can be decoded with VAE
+
+**🎯 Blend Modes (Noise & Artifact Reduction Strategies):**
+
+1. **`quality_aware`** 👑🏆 (Default, Ultimate Solution!)
+   - **Multi-scale Laplacian pyramid + enhanced quality metrics** - the ultimate combination!
+   - **Merges the best technologies**: Frequency decomposition + sophisticated quality analysis
+   - **4-level pyramid decomposition** - separates fine details from smooth areas
+   - **Adaptive per-frequency blending**:
+     - Level 0 (finest details/tree leaves): Very selective (power = 3.8x with default settings)
+     - Level 1 (fine details): Highly selective (power = 2.8x)
+     - Level 2 (medium details): Selective (power = 2.1x)
+     - Level 3+ (coarse/smooth areas): Balanced (power = 1.7x)
+   - **Enhanced quality metrics with edge emphasis**:
+     - Contrast: 60% weight (edges/details prioritized)
+     - Saturation: 25% weight (color richness)
+     - Exposedness: 15% weight (well-exposed regions)
+   - **Result:** Tree leaves perfectly sharp, sky smooth, zero artifacts!
+   - **Use when:** You want professional, artifact-free results (DEFAULT!) 👑
+   - **Parameters:**
+     - `detail_preservation` (0.0-1.0, default 0.7): Controls selectivity sharpness
+     - `center_bias` (0.0-0.8, default 0.4): Boosts center exposure baseline quality
+
+2. **`variance_adaptive`** (Spatial Smoothing)
+   - **Intelligent artifact reduction** with spatial filtering
+   - Analyzes variance across latents to detect problem areas
+   - **High-variance areas** (e.g., inconsistent details): Favors center exposure
+   - **Low-variance areas** (e.g., smooth regions): Uses full dynamic range blending
+   - Adaptive weights with 7x7 spatial smoothing to prevent checkerboard
+   - **Use when:** Alternative approach, good for specific cases
+
+3. **`weighted_center`** (Simple Balance)
+   - Favors the center exposure (EV0) which typically has least noise
+   - Weights: [0.075, 0.1, 0.7, 0.1, 0.075] with default `center_bias=0.4`
+   - **Good balance** of dynamic range and noise reduction
+   - **Use when:** You want simpler processing without adaptive analysis
+
+4. **`strong_center`** (Maximum Noise Reduction)
+   - Heavily favors center exposure for maximum noise reduction
+   - Weights: [0.025, 0.075, 0.8, 0.075, 0.025] with default `center_bias=0.4`
+   - Cleanest output but less dynamic range expansion
+   - **Use when:** Noise is more problematic than dynamic range
+
+5. **`median_blend`** (Outlier Rejection)
+   - Excludes outliers (min/max values) per pixel
+   - Averages middle 3 values: `(sorted[1] + sorted[2] + sorted[3]) / 3`
+   - Excellent noise reduction while preserving detail
+   - **Use when:** You have very noisy latents or want robust averaging
+
+6. **`simple_average`** (Maximum Dynamic Range)
+   - Equal weights: `(L1 + L2 + L3 + L4 + L5) / 5`
+   - Maximum dynamic range but most noise and artifacts
+   - **Use when:** Input latents are already clean
+
+**💡 Artifact & Noise Reduction Tips:**
+- **Use `quality_aware`** (DEFAULT) 👑 - ultimate multi-scale solution with enhanced quality metrics!
+- **For tree leaf ghosting**: Multi-scale pyramid completely eliminates this - finest details use highest power selectivity
+- **Default settings work great** - adaptive quality power per frequency automatically handles everything
+- **Optional tuning:**
+  - Increase `detail_preservation` (0.8-0.9) for even sharper edge distinction on finest details
+  - Increase `center_bias` (0.5-0.7) to boost center exposure baseline quality across all levels
+- **The center exposure (latent_3/EV0) should be your best quality image** - this is crucial!
+
+**When to use:**
+- When working with latent representations from VAE encode
+- For faster processing without decoding to image space
+- When you want to merge multiple exposure latents before final decode
+- In AI-generated HDR workflows using our FLUX.1 Kontext LoRAs
+- When you need noise reduction in latent space
+
+**Workflow Example:**
+1. Encode 5 exposure images to latents using VAE Encode
+2. Connect all 5 latents to Latent Stack Processor
+3. Use default `quality_aware` mode (ultimate solution!) 👑
+4. Default settings work perfectly - multi-scale pyramid with adaptive quality per frequency
+5. Optional fine-tuning (rarely needed):
+   - Increase `detail_preservation` (0.8-0.9) for even sharper edge selectivity
+   - Increase `center_bias` (0.5-0.7) to boost center exposure across all pyramid levels
+6. Decode the merged latent with VAE Decode
+7. Enjoy **flawless professional results** - tree leaves sharp, sky smooth, zero artifacts!
+
 ### 📋 **Complete HDR Workflow Example:**
 
 1. **Load Images**: Load your bracketed exposures (3 or 5 images)
@@ -230,6 +547,29 @@ The nodes feature our **Radiance Fusion Algorithm** as the default, plus traditi
 
 ---
 
+#### **🔬 Debevec with Adaptive Calibration** *(Production Ready)*
+- **Status**: Fully functional with AI-aware calibration
+- **HDR Range**: Raw linear radiance (0 to 8000+ values)
+- **Quality**: ⭐⭐⭐⭐⭐ Professional VFX grade
+- **Purpose**: Scene-referred linear radiance for VFX compositing
+- **Best For**: 
+  - VFX artists working in Nuke/After Effects
+  - Professional color grading workflows
+  - AI-generated exposure brackets (adaptive calibration)
+  - Real camera exposures (traditional bracketing)
+- **Features**:
+  - Automatic exposure time calibration for AI images
+  - Anti-banding bilateral filtering
+  - Built-in exposure compensation (-8 stops default)
+  - Detailed calibration logging
+
+#### **⚙️ Robertson with Adaptive Calibration** *(Production Ready)*
+- **Status**: Alternative to Debevec with same calibration
+- **HDR Range**: Raw linear radiance (VFX standard)
+- **Purpose**: Alternative HDR recovery method with calibration
+
+---
+
 ### **Legacy Algorithms (Work in Progress):**
 
 #### **Natural Blend** *(Under Refinement)*
@@ -241,16 +581,6 @@ The nodes feature our **Radiance Fusion Algorithm** as the default, plus traditi
 - **Status**: Performance improvements in development
 - **HDR Range**: 1-12 (medium HDR values)
 - **Purpose**: Traditional exposure fusion method
-
-#### **Debevec Algorithm** *(Legacy Support)*
-- **Status**: Maintained for compatibility
-- **HDR Range**: Raw linear radiance (VFX standard)
-- **Purpose**: Traditional HDR recovery (1997 method)
-
-#### **Robertson Algorithm** *(Legacy Support)*
-- **Status**: Maintained for compatibility
-- **HDR Range**: Raw linear radiance (VFX standard)
-- **Purpose**: Alternative traditional HDR method
 
 ## 📸 Best Practices
 
@@ -284,24 +614,51 @@ The nodes feature our **Radiance Fusion Algorithm** as the default, plus traditi
 
 ### Algorithm Selection Guide:
 
-#### 🎬 **For VFX/Post-Production:**
-- **🚀 Radiance Fusion** (Recommended): Our custom algorithm - good for professional work
-- **🔬 Debevec** *(Legacy)*: Traditional raw radiance method
-- **⚙️ Robertson** *(Legacy)*: Alternative traditional method
+#### 🎬 **For VFX/Post-Production (Scene-Referred Linear):**
+- **🔬 Debevec with Adaptive Calibration** ⭐ (Recommended for VFX): Production-ready with AI-aware calibration
+  - Perfect for Nuke/After Effects compositing
+  - Works with both AI-generated and real camera exposures
+  - Includes anti-banding and exposure compensation
+  - Outputs true linear radiance (flat/desaturated is correct!)
+- **⚙️ Robertson with Adaptive Calibration**: Alternative to Debevec with same features
+- **🚀 Radiance Fusion**: Nuke-style operations with more display-friendly output
 
-#### 🎨 **For Photography/Display:**
-- **🚀 Radiance Fusion** (Recommended): Our custom algorithm - enhanced quality
+#### 🎨 **For Photography/Display (Display-Referred):**
+- **🎨 Detail Injection** ⭐ (Default): Best for AI-generated images with natural appearance
+  - Automatic brightness compensation
+  - Beautiful output ready for viewing
+  - True HDR values with smooth blending
+- **🚀 Radiance Fusion**: Enhanced quality with good dynamic range
 - **🌟 Natural Blend** *(Work in Progress)*: Being optimized for better results
 - **💫 Mertens** *(Work in Progress)*: Traditional method under improvement
 
 #### 💡 **Important:** 
 - **VFX Algorithms** (Debevec/Robertson): Flat, desaturated appearance - **this is professional standard!**
-- **Display Algorithms** (Natural Blend/Mertens): Enhanced, natural-looking, ready for viewing
+  - Raw linear radiance for compositing and grading
+  - Apply viewing LUTs in Nuke/Resolve for proper display
+- **Display Algorithms** (Detail Injection/Radiance Fusion): Enhanced, natural-looking, ready for viewing
+  - Automatic tone mapping and exposure compensation
+  - Great for final output or quick previews
 
 ## ⚙️ Technical Details
 
-- **Primary Algorithm**: **Radiance Fusion** - Our custom HDR processing method
-- **Legacy Algorithms**: Natural Blend, Mertens, Debevec, Robertson *(work in progress)*
+- **Production Algorithms**: 
+  - **Detail Injection** (Default): AI-aware HDR with automatic brightness compensation
+  - **Radiance Fusion**: Custom Nuke-style HDR algorithm  
+  - **Debevec with Adaptive Calibration**: VFX-grade scene-referred linear radiance
+  - **Robertson with Adaptive Calibration**: Alternative VFX HDR recovery
+- **Adaptive Calibration System**:
+  - Automatic analysis of AI-generated exposure relationships
+  - sRGB-space analysis (matching Debevec's input)
+  - AI-tuned gamma correction (^1.8 power for AI images)
+  - Robust brightness ratio computation using median filtering
+  - EV0-anchored exposure time correction
+  - Detailed calibration logging for transparency
+- **Anti-Banding Technology**:
+  - Edge-aware bilateral filtering (5x5 kernel)
+  - Preserves HDR peaks (80%/20% blend)
+  - Reduces 8-bit quantization artifacts
+- **Legacy Algorithms**: Natural Blend, Mertens *(work in progress)*
 - **Input Format**: 8-bit ComfyUI IMAGE tensors (standard ComfyUI format)
 - **Output Format**: True 32-bit linear HDR with unlimited dynamic range
 - **Processing**: Advanced mathematical operations + OpenCV integration

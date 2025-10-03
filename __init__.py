@@ -40,6 +40,7 @@ try:
     from .luminance_stack_processor import (
         LuminanceStackProcessor3Stops,
         LuminanceStackProcessor5Stops,
+        LatentStackProcessor5Stops,
         NODE_CLASS_MAPPINGS as NODES,
         NODE_DISPLAY_NAME_MAPPINGS as DISPLAY_NAMES
     )

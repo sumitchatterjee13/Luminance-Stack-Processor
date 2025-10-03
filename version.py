@@ -2,16 +2,16 @@
 Version information for Luminance Stack Processor
 """
 
-__version__ = "1.0.5"
-__version_info__ = (1, 0, 5)
+__version__ = "1.1.8"
+__version_info__ = (1, 1, 8)
 
 # Semantic versioning components
 MAJOR = 1
-MINOR = 0
-PATCH = 5
+MINOR = 1
+PATCH = 8
 
 # Build metadata
-BUILD_DATE = "2025-01-20"
+BUILD_DATE = "2025-10-02"
 AUTHOR = "Sumit Chatterjee"
 DESCRIPTION = "Professional HDR processing nodes using the Debevec Algorithm"
 
