@@ -6,15 +6,15 @@
 [![ComfyUI](https://img.shields.io/badge/ComfyUI-compatible-orange.svg)](https://github.com/comfyanonymous/ComfyUI)
 [![GitHub](https://img.shields.io/badge/GitHub-Repository-black.svg)](https://github.com/sumitchatterjee13/Luminance-Stack-Processor)
 
-HDR (High Dynamic Range) processing nodes for ComfyUI featuring my **Detail Injection** algorithm (default) and **Radiance Fusion Algorithm** - custom HDR processing methods that deliver good results for both AI-generated and real-world images.
+HDR (High Dynamic Range) processing nodes for ComfyUI featuring **Detail Injection** algorithm (default) and **Radiance Fusion Algorithm** - custom HDR processing methods that work well for both AI-generated and real-world images.
 
 **Version: 1.1.8** | **Release Date: 2025-10-02**
 
 ## 🎯 Features
 
-- **🎨 DETAIL INJECTION ALGORITHM** *(DEFAULT since v1.1.3)*: Revolutionary AI-aware HDR processing
-  - **Perfect for AI-Generated Images**: Specifically designed for AI exposure stacks
-  - **Now the default algorithm**: Best results out-of-the-box
+- **🎨 DETAIL INJECTION ALGORITHM** *(DEFAULT since v1.1.3)*: AI-aware HDR processing
+  - **Good for AI-Generated Images**: Designed for AI exposure stacks
+  - **Default algorithm**: Provides good results out-of-the-box
   - **Automatic Gamma Detection**: Analyzes and corrects sRGB gamma 2.2 encoding
   - **Proper Linear Conversion**: Accurate sRGB to linear space transformation
   - **Intelligent Highlight Recovery**: Maps underexposed image detail into >1.0 HDR range
@@ -24,15 +24,15 @@ HDR (High Dynamic Range) processing nodes for ComfyUI featuring my **Detail Inje
   - **Hermite Interpolation**: Smooth blending prevents harsh transitions
   - **EV0 Base Preservation**: Keeps natural appearance while extending dynamic range
   - **Linear HDR Output**: True HDR values for professional EXR export
-- **🚀 RADIANCE FUSION ALGORITHM**: My custom HDR algorithm
+- **🚀 RADIANCE FUSION ALGORITHM**: Custom HDR algorithm
   - **Nuke-Inspired Mathematics**: Based on VFX pipeline operations (plus/average)
-  - **Enhanced HDR Preservation**: Maintains excellent dynamic range with natural appearance  
-  - **Improved Results**: Provides quality improvements over traditional methods
+  - **HDR Preservation**: Maintains good dynamic range with natural appearance  
+  - **Alternative Results**: Provides different approach compared to traditional methods
   - **For VFX Work**: Suitable for compositing workflows
 - **🆕 TRUE 32-bit EXR Export**: Professional bit-depth control with imageio integration
 - **🚨 TRUE HDR Values Above 1.0**: Proper HDR data preservation without normalization
 - **🔬 DEBEVEC WITH ADAPTIVE CALIBRATION** *(Experimental)*:
-  - **AI-Aware Calibration**: Automatically analyzes and corrects exposure relationships for AI-generated images
+  - **AI-Aware Calibration**: Analyzes and corrects exposure relationships for AI-generated images
   - **Physically-Based Recovery**: True linear radiance output
   - **Anti-Banding Filtering**: Subtle bilateral filtering reduces quantization artifacts
   - **Exposure Compensation**: Built-in -8 stop default for proper viewing in Nuke/Resolve
@@ -53,7 +53,7 @@ HDR (High Dynamic Range) processing nodes for ComfyUI featuring my **Detail Inje
 
 ### HDR Processing Comparison
 
-See the dramatic difference my Radiance Fusion Algorithm makes in preserving detail across exposure ranges:
+See the difference the Radiance Fusion Algorithm makes in preserving detail across exposure ranges:
 
 #### Indoor Lighting Comparison
 ![Bulb Comparison](images/Bulb.jpg)
@@ -73,9 +73,9 @@ These comparison strips demonstrate how my HDR processing maintains detail in bo
 
 ### 🎨 Detail Injection Algorithm (Default)
 
-**What makes Detail Injection special?**
+**What makes Detail Injection different?**
 
-Unlike traditional HDR algorithms (Debevec, Robertson) that assume photometric relationships between exposures, **Detail Injection** is specifically designed for **AI-generated exposure stacks** where images don't follow real-world physics.
+Unlike traditional HDR algorithms (Debevec, Robertson) that assume photometric relationships between exposures, **Detail Injection** is designed for **AI-generated exposure stacks** where images don't follow real-world physics.
 
 #### **The Problem It Solves:**
 
@@ -107,21 +107,21 @@ AI-generated images simulate different exposures but don't have true photometric
 **Step 4: Automatic Brightness Compensation** 🎚️
 - Analyzes median/mean values
 - Targets **0.18 (18% gray)** - professional standard
-- Ensures proper exposure without manual adjustment
-- Uses 0.3x-8.0x range for extreme correction capability
+- Helps with proper exposure without manual adjustment
+- Uses 0.3x-8.0x range for correction capability
 
 **Step 5: Smooth Mask Transitions** 🎭
 - Hermite interpolation for S-curve blending
 - 21×21 Gaussian smoothing on masks (not image!)
 - Gradual feathering over wide tonal ranges
-- No visible blend boundaries
+- Helps reduce visible blend boundaries
 
 #### **Why Use Detail Injection?**
 
-✅ **For AI-Generated HDR Stacks**: Works well with Flux, SD, MJ exposure variations  
+✅ **For AI-Generated HDR Stacks**: Works with Flux, SD, MJ exposure variations  
 ✅ **Natural EV0 Base**: Looks correct at middle exposure  
 ✅ **True HDR Range**: Values >1.0 for color grading workflows  
-✅ **Automatic Exposure**: No manual brightness adjustment needed  
+✅ **Automatic Exposure**: Helps with brightness adjustment  
 ✅ **Smooth Blending**: Reduces harsh transitions and artifacts  
 ✅ **Color Accuracy**: Maintains hue using luminance-based scaling  
 
@@ -137,7 +137,7 @@ AI-generated images simulate different exposures but don't have true photometric
 
 ### 🔬 Debevec with Adaptive Calibration (NEW!)
 
-**Revolutionary approach to HDR recovery for AI-generated images!**
+**Adaptive approach to HDR recovery for AI-generated images!**
 
 Traditional Debevec algorithm assumes **photometric consistency** - that brightness relationships follow physics:
 ```
@@ -149,7 +149,7 @@ But **AI-generated images don't follow these rules!** Each exposure is independe
 
 #### **My Solution: Adaptive Exposure Calibration**
 
-I've developed an intelligent calibration system that **automatically analyzes and corrects** the exposure relationships:
+I've developed a calibration system that **analyzes and corrects** the exposure relationships:
 
 **Step 1: Analyze Actual Brightness Relationships**
 ```python
@@ -252,7 +252,7 @@ Applied exposure compensation: -8.0 stops (factor: 0.003906x)
 Debevec compensated output: [0.00004, 454.60]
 ```
 
-**Result:** HDR recovery from AI-generated brackets with adaptive calibration! 🎯
+**Result:** HDR recovery from AI-generated brackets with adaptive calibration.
 
 ---
 
@@ -413,7 +413,7 @@ For extended dynamic range with 5 exposures:
 
 ### 🆕 Latent Stack Processor (5 Stops)
 
-**NEW!** Fast latent-space processing with **intelligent noise reduction**:
+**NEW!** Fast latent-space processing with **noise reduction**:
 
 **What it does:**
 - Performs weighted averaging of latent representations with multiple blend modes
@@ -436,9 +436,8 @@ For extended dynamic range with 5 exposures:
 
 **🎯 Blend Modes (Noise & Artifact Reduction Strategies):**
 
-1. **`quality_aware`** 👑🏆 (Default, Ultimate Solution!)
-   - **Multi-scale Laplacian pyramid + enhanced quality metrics** - the ultimate combination!
-   - **Merges the best technologies**: Frequency decomposition + sophisticated quality analysis
+1. **`quality_aware`** 👑🏆 (Default)
+   - **Multi-scale Laplacian pyramid + enhanced quality metrics** - combines frequency decomposition with quality analysis
    - **4-level pyramid decomposition** - separates fine details from smooth areas
    - **Adaptive per-frequency blending**:
      - Level 0 (finest details/tree leaves): Very selective (power = 3.8x with default settings)
@@ -449,8 +448,8 @@ For extended dynamic range with 5 exposures:
      - Contrast: 60% weight (edges/details prioritized)
      - Saturation: 25% weight (color richness)
      - Exposedness: 15% weight (well-exposed regions)
-   - **Result:** Tree leaves perfectly sharp, sky smooth, zero artifacts!
-   - **Use when:** You want professional, artifact-free results (DEFAULT!) 👑
+   - **Result:** Tree leaves sharp, sky smooth, reduced artifacts!
+   - **Use when:** You want good results with reduced artifacts (DEFAULT!) 👑
    - **Parameters:**
      - `detail_preservation` (0.0-1.0, default 0.7): Controls selectivity sharpness
      - `center_bias` (0.0-0.8, default 0.4): Boosts center exposure baseline quality
@@ -487,9 +486,9 @@ For extended dynamic range with 5 exposures:
    - **Use when:** Input latents are already clean
 
 **💡 Artifact & Noise Reduction Tips:**
-- **Use `quality_aware`** (DEFAULT) 👑 - ultimate multi-scale solution with enhanced quality metrics!
-- **For tree leaf ghosting**: Multi-scale pyramid completely eliminates this - finest details use highest power selectivity
-- **Default settings work great** - adaptive quality power per frequency automatically handles everything
+- **Use `quality_aware`** (DEFAULT) 👑 - multi-scale solution with enhanced quality metrics
+- **For tree leaf ghosting**: Multi-scale pyramid helps reduce this - finest details use highest power selectivity
+- **Default settings work well** - adaptive quality power per frequency handles most cases
 - **Optional tuning:**
   - Increase `detail_preservation` (0.8-0.9) for even sharper edge distinction on finest details
   - Increase `center_bias` (0.5-0.7) to boost center exposure baseline quality across all levels
@@ -511,14 +510,14 @@ For extended dynamic range with 5 exposures:
    - Increase `detail_preservation` (0.8-0.9) for even sharper edge selectivity
    - Increase `center_bias` (0.5-0.7) to boost center exposure across all pyramid levels
 6. Decode the merged latent with VAE Decode
-7. Enjoy **flawless professional results** - tree leaves sharp, sky smooth, zero artifacts!
+7. Enjoy **good results** - tree leaves sharp, sky smooth, reduced artifacts!
 
 ### 📋 **Complete HDR Workflow Example:**
 
 1. **Load Images**: Load your bracketed exposures (3 or 5 images)
 2. **Add Processing Node**: "Luminance Stack Processor (3/5 Stops)"
 3. **Connect Exposures**: Connect each EV image to corresponding input
-4. **Choose Algorithm**: Select HDR algorithm (**Radiance Fusion recommended - my custom algorithm**)
+4. **Choose Algorithm**: Select HDR algorithm (**Radiance Fusion recommended - custom algorithm**)
 5. **Add Export Node**: "HDR Export to EXR" 
 6. **Connect HDR Output**: From processor to export node
 7. **Set Filename**: Enter desired filename prefix
@@ -527,22 +526,22 @@ For extended dynamic range with 5 exposures:
 
 ## 🔬 How It Works
 
-The nodes feature my **Radiance Fusion Algorithm** as the default, plus traditional algorithms for compatibility:
+The nodes feature the **Radiance Fusion Algorithm** as the default, plus traditional algorithms for compatibility:
 
 1. **Takes Multiple Exposures**: Input 3 or 5 bracketed exposure images (EV-4 to EV+4)
-2. **Selects HDR Algorithm**: Choose **Radiance Fusion** (my custom algorithm) or traditional methods
+2. **Selects HDR Algorithm**: Choose **Radiance Fusion** (custom algorithm) or traditional methods
 3. **Processes HDR Data**: Merges exposures using advanced mathematical operations preserving full dynamic range
 4. **Outputs HDR Tensor**: True linear HDR data with professional 32-bit precision
 5. **🚨 CRITICAL: Use HDR Export Node**: Exports professional 32-bit EXR files with preserved HDR values
 
 ### 🎯 **HDR Algorithm Options:**
 
-#### **🚀 Radiance Fusion (Default - My Custom Algorithm)**  
+#### **🚀 Radiance Fusion (Default - Custom Algorithm)**  
 - **📈 HDR Range**: Wide dynamic range with good preservation
-- **🧮 Advanced Mathematics**: Nuke-inspired plus/average operations for enhanced results
+- **🧮 Mathematics**: Nuke-inspired plus/average operations
 - **🎬 Quality**: VFX-oriented HDR processing with natural appearance
-- **⚡ Good Performance**: Well-balanced dynamic range and visual appeal
-- **🔬 In-House Development**: My custom algorithm with improvements over traditional methods
+- **⚡ Performance**: Well-balanced dynamic range and visual appeal
+- **🔬 Custom Development**: Custom algorithm with improvements over traditional methods
 - **💎 Quality Focus**: Enhanced compared to standard techniques
 
 ---
@@ -781,4 +780,4 @@ I welcome contributions! Please:
 
 ---
 
-**Happy HDR Processing with Radiance Fusion!** 🚀✨ | **Version 1.0.5** | **Featuring My Custom Algorithm**
+**Happy HDR Processing with Radiance Fusion!** 🚀✨ | **Version 1.1.8** | **Featuring Custom Algorithm**
